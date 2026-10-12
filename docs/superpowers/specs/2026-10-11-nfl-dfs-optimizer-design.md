@@ -12,7 +12,7 @@
 A personal tool that, each week, gives Nathan **one recommended DraftKings NFL lineup** for the Sunday main slate plus a **short list of outlier swaps** for building his own variations — with as little weekly effort as possible.
 
 **Success looks like:**
-- Opening the app (laptop or phone) on Sunday shows a fresh, valid lineup for the chosen mode with no manual steps beforehand.
+- Opening the app (laptop or phone) on Sunday shows a fresh, valid lineup for the chosen DraftKings contest type with no manual steps beforehand.
 - Picking a **DraftKings contest type by its DraftKings name** (Head-to-Head, 50/50, Double Up, Multiplier, Single Entry / 3-Max tournament, Tournament, Large-Field Tournament) instantly shows the lineup built for that contest.
 - Every player shows an estimated ownership % and a common/uncommon tier.
 - Total weekly hands-on time ≈ 2 minutes (plus an optional 2-click results import on Monday).
