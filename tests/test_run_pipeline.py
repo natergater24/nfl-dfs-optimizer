@@ -38,10 +38,10 @@ def _fake_stats(tmp_path, monkeypatch, mtime):
     import pandas as pd
     monkeypatch.setattr(config, "PROCESSED", tmp_path)
     pd.DataFrame({"season": [2026, 2026], "week": [4, 5]}).to_parquet(tmp_path / "player_weeks.parquet")
-    for f in ("team_weeks.parquet", "team_model.json"):
+    for f in ("team_weeks.parquet", "team_model.json", "schedule_rows.parquet"):
         (tmp_path / f).write_text("x")
     ts = dt.datetime.combine(mtime, dt.time(12, 0)).timestamp()
-    for f in ("player_weeks.parquet", "team_weeks.parquet", "team_model.json"):
+    for f in ("player_weeks.parquet", "team_weeks.parquet", "team_model.json", "schedule_rows.parquet"):
         os.utime(tmp_path / f, (ts, ts))
     ran = []
     monkeypatch.setattr(run_pipeline, "step_stats", lambda today, args: ran.append(1) or "rebuilt")

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from . import lineups, ownership, shares, simulate, team_env
+from . import lineups, matchups, ownership, shares, simulate, team_env
 from .config import FIELD_SIZE, N_CANDIDATES, N_SIMS, SEED
 from .vegas import implied_totals
 
@@ -25,7 +25,7 @@ def assemble_team_expectations(pool_base: pd.DataFrame, vegas_games: pd.DataFram
 
 
 def build_slate(pool_base, player_weeks, team_weeks, team_model, vegas_games, *, n_sims: int = N_SIMS,
-                seed: int = SEED, n_candidates: int = N_CANDIDATES, field_size: int = FIELD_SIZE) -> dict:
+                seed: int = SEED, n_candidates: int = N_CANDIDATES, field_size: int = FIELD_SIZE, schedule_rows=None) -> dict:
     pool, team_exp = assemble_team_expectations(pool_base, vegas_games, team_model)
     pool = shares.attach_shares(pool, shares.compute_shares(player_weeks, team_weeks))
     pool = shares.redistribute(pool).reset_index(drop=True)
@@ -33,6 +33,9 @@ def build_slate(pool_base, player_weeks, team_weeks, team_model, vegas_games, *,
     pool = pool.join(simulate.summarize(sims, pool))
     pool["own_pct"] = ownership.estimate_ownership(pool)
     pool["tier"] = pool.own_pct.map(ownership.ownership_tier)
+    dvp = (matchups.defense_vs_position(player_weeks, schedule_rows) if schedule_rows is not None
+           else pd.DataFrame(columns=["defense", "position", "allowed", "ratio", "rank"]))
+    pool = matchups.attach_matchups(pool, dvp)
     lus, swaps = lineups.build_all(pool, sims, n_candidates=n_candidates, field_size=field_size, seed=seed)
     offense = pool[(pool.position != "DST") & pool.playable]
     return {"pool": pool, "sims": sims, "lineups": lus, "swaps": swaps,

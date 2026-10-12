@@ -61,3 +61,12 @@ def test_build_slate_end_to_end():
     assert "AAA WR1" not in set(lus["name"])
     for _, g in lus[lus["rank"] == 0].groupby("contest_key"):
         assert dk_rules.validate_lineup(g) == []
+
+
+def test_build_slate_adds_matchup_columns():
+    pool_base, pw, tw, games = _inputs()
+    res = build.build_slate(pool_base, pw, tw, MODEL, games, n_sims=200, seed=1, n_candidates=2, field_size=100)
+    from nfldfs.matchups import MATCHUP_COLUMNS
+    assert set(MATCHUP_COLUMNS) <= set(res["pool"].columns)
+    offense = res["pool"][res["pool"].position != "DST"]
+    assert (offense.mu_label == "Neutral").all()    # no schedule_rows given → neutral (DST rating is Vegas-based)

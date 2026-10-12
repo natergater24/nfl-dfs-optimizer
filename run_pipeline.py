@@ -61,16 +61,19 @@ def step_stats(today, args) -> str:
     raw, sched = nfl_stats.load_raw(list(range(season - config.STATS_SEASONS_BACK, season + 1)))
     pw = nfl_stats.normalize_player_stats(raw)
     tw = nfl_stats.team_week_totals(pw)
-    model = team_env.fit_team_model(team_env.build_training_frame(tw, nfl_stats.normalize_schedules(sched)))
+    sched_rows = nfl_stats.normalize_schedules(sched)
+    model = team_env.fit_team_model(team_env.build_training_frame(tw, sched_rows))
     atomic_write_parquet(pw, config.PROCESSED / "player_weeks.parquet")
     atomic_write_parquet(tw, config.PROCESSED / "team_weeks.parquet")
+    atomic_write_parquet(sched_rows, config.PROCESSED / "schedule_rows.parquet")
     atomic_write_text(config.PROCESSED / "team_model.json", json.dumps(model, indent=2))
     latest = pw[pw.season == pw.season.max()].week.max()
     return f"{len(pw)} player-weeks through {pw.season.max()} week {latest}; model fit on {model['n_games']} team-games"
 
 
 def step_stats_if_missing(today, args) -> str:
-    needed = [config.PROCESSED / f for f in ("player_weeks.parquet", "team_weeks.parquet", "team_model.json")]
+    needed = [config.PROCESSED / f for f in ("player_weeks.parquet", "team_weeks.parquet", "team_model.json",
+                                                    "schedule_rows.parquet")]
     pw_path = config.PROCESSED / "player_weeks.parquet"
     if all(p.exists() for p in needed):
         # Tuesday is when the week's games are complete and the scheduled refresh runs.
@@ -94,11 +97,13 @@ def step_vegas(today, args) -> str:
 
 def step_build(today, args) -> str:
     P = config.PROCESSED
+    sched_path = P / "schedule_rows.parquet"
     res = build.build_slate(
         pd.read_parquet(P / "pool_base.parquet"), pd.read_parquet(P / "player_weeks.parquet"),
         pd.read_parquet(P / "team_weeks.parquet"), json.loads((P / "team_model.json").read_text()),
         pd.read_parquet(P / "vegas_games.parquet"), n_sims=config.N_SIMS, seed=config.SEED,
-        n_candidates=config.N_CANDIDATES, field_size=config.FIELD_SIZE)
+        n_candidates=config.N_CANDIDATES, field_size=config.FIELD_SIZE,
+        schedule_rows=pd.read_parquet(sched_path) if sched_path.exists() else None)
     out = config.PUBLISHED
     atomic_write_parquet(res["pool"], out / "player_pool.parquet")
     atomic_write_parquet(res["lineups"], out / "lineups.parquet")
