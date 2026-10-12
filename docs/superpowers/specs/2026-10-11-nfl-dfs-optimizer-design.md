@@ -146,24 +146,51 @@ Stacking rules apply to the Tournament group (and optionally Multiplier, off by 
 ### 8.3 Outlier swaps
 For the chosen lineup in each contest type, list **5–8 single-player swaps** that keep the lineup valid and under the cap, ranked by that contest type's objective with emphasis on 💎/Moderate players with high boom rate. Each shows salary delta, remaining salary, ceiling/median delta, and ownership tier.
 
-## 9. App (`app.py`) — single page + sidebar
+## 9. App (`app.py`) — tabs + sidebar (revised 2026-10-12 from the approved prototype)
 
-**Header:** slate name + game count, "Updated N min ago" (color-coded like MLB), **DraftKings contest type** selector (the 7 names in §8.1, grouped Cash / Multiplier / Tournament; a 3x/5x/10x sub-choice appears for Multiplier), Refresh button (local only). A **red banner** appears only when a pipeline step failed, naming the step and the fix.
+**Display rules (everywhere):** salaries as full dollars (`$7,500`, never `$7.5K`). Every player's opponent is a
+**matchup tag** — "vs LV · Great" — colored on a red → green gradient (Very tough / Tough / Neutral / Good / Great).
+Matchup = DK points that defense allowed to that position over its last 6 games ÷ league average (DST: league-average
+implied total ÷ the opponent's Vegas implied total); hover/tap shows the detail ("allows 19.7 DK pts/game to QBs —
+8th-easiest of 32"). Matchup is display-only in v1 (not a projection input). Ownership tiers show as 🔥 Chalk /
+Popular / Moderate / 💎 Contrarian.
 
-**Recommended lineup panel:** position, player, team, salary, median, floor, ceiling, ownership % + tier; total salary / $50,000; stack summary; one-sentence "why this lineup"; sim result in that contest's terms ("Wins the head-to-head in X% of sims" / "Cashes in X% of sims" / "Top-1% in X% of sims"); **Download DraftKings upload CSV**.
+**Header:** slate name + game count, "Updated N min ago" (color-coded like MLB), **DraftKings contest type** selector
+(the 9 contest types in §8.1 by DraftKings name), **ℹ️ Key** popover, Refresh button (local only). The Key popover is
+deliberately short: what each ownership tier means (Chalk 25%+ safe/no edge; Popular 10–25%; Moderate 5–10%;
+Contrarian <5% — if he hits you pass most of the field), what matchup green/red means, and one line of strategy
+(cash leans Chalk; tournaments mix in Moderate/Contrarian). A **red banner** appears only when a pipeline step
+failed, naming the step and the fix.
 
-**Outliers panel:** swap rows with **Apply swap**; applying re-validates and re-scores against the simulation matrix in seconds. Session keeps the user's variations; one CSV exports all of them.
+**Tab ⭐ Recommended:** lineup table (Pos, Player, Team, matchup tag, Salary, Median, Floor, Ceiling, Own %, Tier);
+salary used / left; projected median and ceiling; the contest-specific simulated result labeled as model-relative
+("Finishes top-1% in X% of sims — for comparing lineups, not real-world odds"); stack summary; **Download DraftKings
+upload CSV**; alternates #2/#3 (expander); **💎 Outliers** — cap-safe single swaps, spread across positions (at most 2
+per position), each with an **Apply** button that copies the swapped lineup into My Lineup with that slot selected.
 
-**Player pool (expander):** every player, sortable/filterable by position, tier, value; 🔒 lock / ✖ exclude, then **Rebuild with my locks**.
+**Tab 🛠 My Lineup (interactive builder; a Streamlit components v2 custom component):**
+- Top: **Start from** (blank or any contest type's recommended lineup) + Load; live totals (salary used/left, red when
+  over $50,000; projected median; ceiling; "Beats the <contest> pick in X% of sims", or "Same lineup").
+- Two panels side by side (stacked on narrow screens): **left = your 9 slots** (QB, RB, RB, WR, WR, WR, TE, FLEX, DST)
+  each showing player, team, matchup tag, salary, median, tier, and an × to empty it; **right = the entire playable
+  player pool** with filter buttons All / QB / RB / WR / TE / FLEX / DST, a search box, **Rank by** (Recommended for the
+  selected contest type, Expected points, Ceiling, Price high→low, Price low→high, Value pts per $1K, Ownership
+  low→high), an "Only what I can afford" toggle, and per row: salary (plus $ left after the swap when a slot is
+  selected), median / ceiling, pts per $1K, own %, tier, matchup tag; players already in the lineup are faded
+  and tagged.
+- Three ways to swap: (1) click a slot → the pool switches to eligible players and grays out the rest, click a player
+  to swap; (2) click a pool player → lineup slots he can't fill gray out, eligible slots get a dashed outline, click
+  one to swap; (3) drag a pool player onto an eligible slot. Moving an in-lineup player to another eligible slot
+  trades the two. Esc clears a selection. On phones, tap (1)/(2) is the primary method.
+- Below: errors (over cap / empty slots), **Download My Lineup (DraftKings CSV)** — disabled unless the lineup is
+  valid (validated by `dk_rules`) — and a side-by-side comparison with the recommended lineup (expander).
+- Works on the hosted app too (session only, not persisted between visits).
 
-**My Lineup builder (added 2026-10-12):** a separate panel next to the recommended lineup.
-- Nine empty slots (QB, RB, RB, WR, WR, WR, TE, FLEX, DST). Each slot picks from **every playable player on the slate** eligible for that slot, searchable, showing salary, median/floor/ceiling and ownership tier.
-- **Start from:** blank, or a copy of any contest type's recommended lineup or alternates, then change any slot freely.
-- Live totals: salary used / remaining against $50,000 (over-cap shown in red, and export disabled), projected median/floor/ceiling, and the selected contest type's simulated result for this lineup ("Cashes in X% of sims" / "Top-1% in X% of sims"), scored against the published simulations so it is comparable to the recommended lineup.
-- Side-by-side comparison table: recommended lineup vs. My Lineup.
-- Save several custom lineups in the session and download any or all of them in the DraftKings upload CSV (validated by `dk_rules` first; an invalid lineup can't be exported). Works on the hosted app too (not persisted between visits).
+**Tab 📋 Player pool:** every playable player, filter by position and tier, sort by median / ceiling / boom % / value
+/ ownership / salary; matchup tag column; 🔒 lock / ✖ exclude per player, then **Rebuild with my locks** (re-runs the
+optimizer + simulation pick for the selected contest type in the session).
 
-**Report card (expander):** last week's projections vs. actual points and estimated vs. actual ownership; season-to-date accuracy.
+**Report card (Recommended tab expander):** last week's projections vs. actual points and estimated vs. actual ownership; season-to-date accuracy.
 
 **Pre-lock warning:** if a lineup player's DK status changed to Out/Doubtful after the last refresh → "⚠ Re-run Refresh".
 
