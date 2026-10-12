@@ -92,3 +92,23 @@ def test_starter_share_survives_team_cap():
     out = shares.redistribute(shares.attach_shares(pool, sh))
     assert out.loc[out.name == "Starter", "carry_share"].iloc[0] >= 0.55
     assert out.carry_share.sum() <= shares.MAX_TEAM_SHARE + 1e-9
+
+
+def test_shares_only_count_games_with_current_team():
+    rows, trows = [], []
+    for wk in range(1, 10):
+        team = "WAS" if wk <= 6 else "ATL"
+        rows.append(dict(player_id="R1", name="Brian Robinson", position="RB", team=team, season=2026, week=wk,
+                         targets=0, receptions=0, rec_yds=0.0, carries=15 if wk <= 6 else 3, rush_yds=50.0))
+        for t in ("WAS", "ATL"):
+            if (t == team):
+                trows.append(dict(season=2026, week=wk, team=t, targets=30, carries=25))
+    pw, tw = pd.DataFrame(rows), pd.DataFrame(trows)
+    sh = shares.compute_shares(pw, tw)
+    by = sh.set_index("team")
+    assert by.loc["ATL", "carry_share"] < 0.3 and by.loc["WAS", "carry_share"] > 0.5
+    assert sh.iloc[0].team == "ATL"
+    out = shares.attach_shares(_pool([{"name": "Brian Robinson", "position": "RB", "team": "ATL"}]), sh)
+    assert out.carry_share.iloc[0] == pytest.approx(by.loc["ATL", "carry_share"])
+    out2 = shares.attach_shares(_pool([{"name": "Brian Robinson", "position": "RB", "team": "XXX"}]), sh)
+    assert out2.carry_share.iloc[0] == pytest.approx(by.loc["ATL", "carry_share"])

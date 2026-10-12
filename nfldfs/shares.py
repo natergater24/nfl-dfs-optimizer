@@ -16,7 +16,7 @@ POSITION_PRIORS = {
 }
 # Players DraftKings lists that have no nflverse history (rookies, call-ups): small, conservative roles.
 UNKNOWN_PLAYER_SHARE = {
-    "QB": {"tgt_share": 0.0, "carry_share": 0.05},
+    "QB": {"tgt_share": 0.0, "carry_share": 0.02},
     "RB": {"tgt_share": 0.02, "carry_share": 0.05},
     "WR": {"tgt_share": 0.03, "carry_share": 0.0},
     "TE": {"tgt_share": 0.02, "carry_share": 0.0},
@@ -36,19 +36,21 @@ def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_ga
     df = player_weeks.merge(tw, on=["season", "week", "team"], how="left").fillna(
         {"team_targets": 0, "team_carries": 0})
     df = df.sort_values(["player_id", "season", "week"])
-    df["age"] = df.groupby("player_id").cumcount(ascending=False)
+    df["age"] = df.groupby(["player_id", "team"]).cumcount(ascending=False)
     df = df[df.age < n_games].copy()
     df["w"] = 0.5 ** (df.age / half_life)
     for c in ("targets", "team_targets", "carries", "team_carries"):
         df[f"w_{c}"] = df.w * df[c]
-    g = df.groupby("player_id").agg(
-        name=("name", "last"), position=("position", "last"), team=("team", "last"),
+    df["_t"] = df.season * 100 + df.week
+    g = df.groupby(["player_id", "team"]).agg(
+        name=("name", "last"), position=("position", "last"), last_t=("_t", "max"),
         games=("w", "size"), n_eff=("w", "sum"),
         w_targets=("w_targets", "sum"), w_team_targets=("w_team_targets", "sum"),
         w_carries=("w_carries", "sum"), w_team_carries=("w_team_carries", "sum"),
         targets=("targets", "sum"), receptions=("receptions", "sum"), rec_yds=("rec_yds", "sum"),
         carries=("carries", "sum"), rush_yds=("rush_yds", "sum"),
     ).reset_index()
+    g = g.sort_values(["player_id", "last_t"], ascending=[True, False], kind="stable").reset_index(drop=True)
     prior = lambda key: g.position.map(lambda p: POSITION_PRIORS[p][key])
     eff = lambda key: g.position.map(EFFICIENCY_PRIORS[key])
     obs_t = np.where(g.w_team_targets > 0, g.w_targets / g.w_team_targets.where(g.w_team_targets > 0, 1), 0.0)
