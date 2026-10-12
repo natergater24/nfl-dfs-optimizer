@@ -39,7 +39,10 @@ def normalize_player_stats(raw: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame({k: _first(raw, k, v) for k, v in _ALIASES.items()})
     for k, cols in _SUMMED.items():
         present = [c for c in cols if c in raw.columns]
-        out[k] = raw[present].fillna(0).sum(axis=1) if present else 0
+        if not present:
+            raise KeyError(f"nflverse player stats have none of {cols} (needed for '{k}'); "
+                           f"available columns: {sorted(raw.columns)}")
+        out[k] = raw[present].fillna(0).sum(axis=1)
     num = [c for c in out.columns if c not in _TEXT]
     out[num] = out[num].apply(pd.to_numeric, errors="coerce").fillna(0)
     out["position"] = out["position"].replace({"FB": "RB"})

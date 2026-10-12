@@ -12,6 +12,7 @@ def _raw_stats():
         "interceptions": [0, 1, 0], "carries": [1, 2, 0], "rushing_yards": [5, 3, 0], "rushing_tds": [0, 0, 0],
         "targets": [9, 0, 0], "receptions": [7, 0, 0], "receiving_yards": [95, 0, 0], "receiving_tds": [1, 0, 0],
         "sack_fumbles_lost": [0, 1, 0], "rushing_fumbles_lost": [0, 0, 0],
+        "passing_2pt_conversions": [0, 0, 0], "rushing_2pt_conversions": [0, 0, 0],
     })
 
 
@@ -28,6 +29,12 @@ def test_normalize_player_stats_handles_aliases_and_scores():
 def test_normalize_player_stats_errors_clearly_on_schema_change():
     with pytest.raises(KeyError, match="targets"):
         nfl_stats.normalize_player_stats(_raw_stats().drop(columns=["targets"]))
+
+
+def test_normalize_player_stats_errors_when_all_fumble_columns_missing():
+    raw = _raw_stats().drop(columns=["sack_fumbles_lost", "rushing_fumbles_lost"])
+    with pytest.raises(KeyError, match="fumbles_lost"):
+        nfl_stats.normalize_player_stats(raw)
 
 
 def test_team_week_totals_sums_players():
