@@ -66,3 +66,31 @@ def styled_pool(df: pd.DataFrame):
     return (view.style.apply(_matchup_css(df["mu_color"].tolist()), subset=["Matchup"])
             .format({"Salary": "${:,.0f}", "Median": "{:.1f}", "Floor": "{:.1f}", "Ceiling": "{:.1f}",
                      "Boom %": "{:.0f}%", "Pts/$1K": "{:.2f}", "Own %": "{:.1f}%"}))
+
+
+def swap_line(s, pool_by_id) -> str:
+    p = pool_by_id.loc[int(s.in_dk_id)]
+    sign = "+" if s.salary_delta > 0 else "−"
+    tag = (f"<span style='background:{p['mu_color']};color:#fff;font-weight:600;font-size:12px;"
+           f"padding:1px 6px;border-radius:4px'>vs {p['opp']} · {p['mu_label']}</span>")
+    return (f"Swap **{s.out_name}** → **{s.in_name}** ({s.position}, {s.in_team}, {TIER_ICON[s.in_tier]} "
+            f"{s.in_own_pct:.1f}%) {tag} · {sign}\\${abs(int(s.salary_delta)):,} · "
+            f"\\${int(s.remaining_salary):,} left · ceiling {s.ceiling_delta:+.1f}")
+
+
+def report_card_widget(card: dict) -> None:
+    import streamlit as st
+    if not card or not card.get("weeks"):
+        st.caption("No results imported yet — after Sunday's games, follow 📥 in the sidebar.")
+        return
+    lat, sea = card.get("latest", {}), card.get("season", {})
+    c = st.columns(3)
+    c[0].metric("Projection error", f"{lat.get('proj_mae', '—')} pts",
+                help="Average gap between our median and the actual DraftKings points.")
+    c[1].metric("Actual inside floor–ceiling", f"{lat.get('in_range_pct', '—')}%",
+                help="About 65% means the floor/ceiling ranges are well calibrated.")
+    c[2].metric("Ownership error", f"{lat.get('own_mae', '—')} pts of %",
+                help="Average gap between estimated and actual ownership.")
+    st.caption(f"Latest slate {card.get('latest_slate')} · season to date ({card['weeks']} weeks): "
+               f"{sea.get('proj_mae', '—')} pts error, {sea.get('in_range_pct', '—')}% in range, "
+               f"ownership error {sea.get('own_mae', '—')}")
