@@ -49,6 +49,9 @@ def render(d, key, label, field_scores):
         except InfeasibleError as e:
             st.error(str(e))
     rb = st.session_state.get("rebuilt")
+    if rb and any(int(i) not in d.row_of for i in rb["ids"]):    # stale after a new slate was built
+        st.session_state.pop("rebuilt", None)
+        rb = None
     if rb and rb["key"] == key:
         lu = d.pool.set_index("dk_id").loc[rb["ids"]].reset_index()
         lu.insert(0, "slot", list(ROSTER_SLOTS))
@@ -57,4 +60,5 @@ def render(d, key, label, field_scores):
         st.dataframe(ui.styled_lineup(lu), hide_index=True, width="stretch")
         if st.button("Send to 🛠 My Lineup", key="pool_send"):
             st.session_state.my_ids = rb["ids"]
-            st.toast("Copied into 🛠 My Lineup")
+            st.session_state.flash = (True, "Copied into 🛠 My Lineup")
+            st.rerun()                          # the 🛠 tab rendered earlier this run; redraw it with the new ids

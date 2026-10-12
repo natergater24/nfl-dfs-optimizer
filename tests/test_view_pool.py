@@ -31,3 +31,25 @@ def test_pool_tab_renders(make_app, published_dir):
     at = make_app(published_dir)
     assert not at.exception
     assert at.multiselect(key="pool_locks") is not None and at.button(key="pool_rebuild").disabled
+
+
+def test_send_rebuilt_lineup_to_builder(make_app, published_dir):
+    d = data.load(published_dir)
+    at = make_app(published_dir)
+    ms = at.multiselect(key="pool_locks")
+    te = d.pool[(d.pool.position == "TE") & d.pool.playable].sort_values("salary").iloc[0]
+    label = next(o for o in ms.options if o.startswith(f"{te['name']} · TE"))
+    ms.select(label).run()
+    at.button(key="pool_rebuild").click().run()
+    rebuilt = at.session_state["rebuilt"]["ids"]
+    at.button(key="pool_send").click().run()
+    assert not at.exception
+    assert at.session_state["my_ids"] == rebuilt and int(te.dk_id) in rebuilt
+    assert any("Copied into 🛠 My Lineup" in s.value for s in at.success)
+
+
+def test_stale_rebuilt_lineup_is_dropped(make_app, published_dir):
+    at = make_app(published_dir)
+    at.session_state["rebuilt"] = {"key": "single_entry", "ids": list(range(1, 10)), "metric": 0.5}
+    at.run()
+    assert not at.exception and "rebuilt" not in at.session_state
