@@ -12,6 +12,19 @@ from nfldfs import config
 from tests.conftest import make_pool
 
 
+@pytest.fixture(autouse=True)
+def _private_lock_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path / "data")     # never touch the real data/.pipeline.lock
+
+
+def _hold_lock():
+    import fcntl
+    config.DATA.mkdir(parents=True, exist_ok=True)
+    f = open(config.DATA / ".pipeline.lock", "w")
+    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    return f
+
+
 def test_every_stage_step_exists():
     for steps in run_pipeline.STAGES.values():
         for s in steps:
@@ -243,3 +256,37 @@ def test_publish_runs_after_status_finish_on_success(tmp_path, monkeypatch):
     seen = _stage_with_publish(tmp_path, monkeypatch, lambda t, a: "fine")
     assert run_pipeline.main(["--stage", "test", "--today", "2026-10-15"]) == 0
     assert len(seen) == 1 and seen[0]["ok"] is True and seen[0]["finished"]
+
+
+def test_results_stage_returns_quietly_while_another_run_holds_the_lock(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    (tmp_path / "Downloads" / "contest-standings-1.zip").write_bytes(b"PK")
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "results", lambda t, a: pytest.fail("must not run"))
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "publish", lambda t, a: pytest.fail("must not publish"))
+    held = _hold_lock()
+    try:
+        assert run_pipeline.main(["--stage", "results", "--today", "2026-10-19"]) == 0
+    finally:
+        held.close()
+    assert not (tmp_path / "published" / "results_status.json").exists()
+
+
+def test_other_stages_wait_for_the_lock_then_fail(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_pipeline, "LOCK_WAIT_SECONDS", 0.2)
+    monkeypatch.setattr(run_pipeline, "LOCK_POLL_SECONDS", 0.05)
+    monkeypatch.setattr(run_pipeline, "STAGES", {"test": ["a"]})
+    monkeypatch.setattr(run_pipeline, "STEP_FUNCS", {"a": lambda t, a: pytest.fail("must not run")})
+    held = _hold_lock()
+    try:
+        assert run_pipeline.main(["--stage", "test", "--today", "2026-10-15"]) == 1
+    finally:
+        held.close()
+
+
+def test_lock_is_released_after_a_run(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_pipeline, "STAGES", {"test": ["a"]})
+    monkeypatch.setattr(run_pipeline, "STEP_FUNCS", {"a": lambda t, a: "fine"})
+    assert run_pipeline.main(["--stage", "test", "--today", "2026-10-15"]) == 0
+    _hold_lock().close()                                          # would raise BlockingIOError if still held

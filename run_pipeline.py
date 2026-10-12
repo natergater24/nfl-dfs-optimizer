@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import json
 import logging
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -29,6 +31,7 @@ from nfldfs.build import write_published
 from nfldfs.status import RunStatus, atomic_write_parquet, atomic_write_text
 
 log = logging.getLogger("pipeline")
+LOCK_WAIT_SECONDS, LOCK_POLL_SECONDS = 15 * 60, 5
 
 
 def _now() -> str:
@@ -234,6 +237,22 @@ STEP_FUNCS = {
 }
 
 
+def _acquire_lock(wait: bool):
+    """Exclusive lock on data/.pipeline.lock so two runs never write the same files at once."""
+    config.DATA.mkdir(parents=True, exist_ok=True)
+    f = open(config.DATA / ".pipeline.lock", "w")
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    while True:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return f
+        except BlockingIOError:
+            if not wait or time.monotonic() >= deadline:
+                f.close()
+                return None
+            time.sleep(LOCK_POLL_SECONDS)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", required=True)
@@ -248,6 +267,21 @@ def main(argv=None) -> int:
                         handlers=[logging.StreamHandler(sys.stdout),
                                   logging.FileHandler(config.LOGS / "pipeline.log")])
     today = dt.date.fromisoformat(args.today) if args.today else dt.date.today()
+    lock = _acquire_lock(wait=args.stage != "results")
+    if lock is None:
+        if args.stage == "results":
+            log.info("results: another pipeline run is in progress — will retry on the next Downloads change")
+            return 0
+        log.error("Another pipeline run has been going for over %d minutes, so the %s run was not started. "
+                  "Try again later.", LOCK_WAIT_SECONDS // 60, args.stage)
+        return 1
+    try:
+        return _run(args, today)
+    finally:
+        lock.close()
+
+
+def _run(args, today) -> int:
     if args.stage == "results" and not args.results_file and not _new_results_waiting():
         log.info("results: no new contest-standings file — nothing to do")   # keep the last import's status
         return 0
