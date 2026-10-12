@@ -1,0 +1,75 @@
+NFL DFS LINEUP OPTIMIZER - PROJECT BRIEFING (2026-10-12)
+
+PURPOSE
+Personal-use engine that builds DraftKings NFL Sunday main-slate lineups for every DK
+contest type (Head-to-Head, 50/50, Double Up, Multiplier 3x/5x/10x, Single Entry / 3-Max,
+Tournament, Large-Field Tournament). Never logs in to DraftKings or enters contests.
+Spec: docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md
+Plan 1 (engine, this build): docs/superpowers/plans/2026-10-12-nfl-dfs-engine.md
+Branch: engine. Run via ./py (system Python 3.14). Tests: ./py -m pytest -q (94 pass).
+
+MODULE MAP
+NFL_DFS/
+  py                         wrapper -> system Python 3.14
+  requirements.txt, pytest.ini, .gitignore, env.txt.example
+  run_pipeline.py            stage runner (tuesday|thursday|sunday|build)
+  nfldfs/
+    config.py                paths, every tunable number, contest types
+    status.py                atomic writes + RunStatus
+    teams.py                 team abbreviations, Odds-API names, name normalization
+    dk_rules.py              roster/cap rules, DK scoring, slot assignment, upload CSV
+    dk_salaries.py           lobby -> main slate -> salary CSV -> player pool
+    vegas.py                 The Odds API -> game lines -> implied team totals
+    nfl_stats.py             nflreadpy loaders + normalization
+    team_env.py              implied total -> expected team stats model
+    shares.py                player usage shares, name matching, injury redistribution
+    simulate.py              Monte Carlo -> DK points matrix + summaries
+    ownership.py             ownership estimate + tiers
+    optimizer.py             PuLP lineup solver
+    sim_eval.py              simulated field + contest metrics
+    lineups.py               candidates, contest picks, swaps
+    build.py                 assembles a full slate build
+  tests/                     conftest.py (synthetic slate), fixtures/, test_*.py per module
+  data/, logs/               git-ignored (raw/, processed/, published/)
+
+DATA SOURCES
+- DK lobby JSON (unauthenticated): https://www.draftkings.com/lobby/getcontests?sport=NFL
+- DK salary CSV (official Export to CSV URL):
+  https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={contest_type_id}&draftGroupId={draft_group_id}
+- FINDING: DK's JSON "draftables" API returns 403 and must not be used; the CSV URL is the
+  same file as the manual fallback (--salary-csv), so one parser serves both.
+- nflverse via nflreadpy (player/team weekly stats). Vegas lines: The Odds API
+  (ODDS_API_KEY in git-ignored env.txt; shared 500/month quota with MLB_Pipeline; ~2 units per run).
+
+DELIBERATE DEVIATIONS FROM THE SPEC
+- Numbered src/NN_*.py scripts became importable modules in nfldfs/; run_pipeline.py runs them in-process.
+- Red-zone shares not in v1: TDs allocated by target/carry share x position TD weight (simulate.TD_WEIGHT).
+- DK draftables endpoint replaced by DK's CSV export URL (see above).
+
+LIVE DRY RUN (2026-10-12, slate Sun 2026-10-18, draft group 154941)
+- tuesday: exit 0, 513 players, 10 games; stats through 2026 week 5; team model on 1788 team-games. ~3 s.
+- thursday: exit 0, wall time 1:40 (target < 10 min); Vegas 15 games with lines, Odds API 498 requests left;
+  build: 9 contest types, name match rate 83% (pool match flag 81%), 407 playable players.
+- All 9 recommended lineups validate and are <= $50,000; upload CSV = header + 9 rows. 8 swaps per contest type.
+- Sanity checks that FAILED / need Nathan's decision (nothing was tuned):
+  1. Match rate 83% < 90% target. Unmatched are mostly 2026 rookies/backups/$4,000 filler (e.g. Ty Simpson,
+     Cade Klubnik), but 67 of the 95 unmatched are flagged playable.
+  2. Median points too low outside QB: top RB/WR medians 14.0/11.5 (target ~15-22); TE 8.2. QB 22.2/21.5/18.3 ok;
+     DST 7-8 ok. Cause candidate: team model coefficients are weak (pass_yds slope 8.27/pt of implied total).
+  3. Ownership: position totals match SLOT_TOTALS (QB 100, RB 230, WR 355, TE 115, DST 100) but 60% cap is hit by
+     several players (e.g. Kyren Williams, Jaylen Warren, Zay Flowers, Tyler Higbee) -> several 60.0 values.
+  4. Cash lineups (H2H/50-50/Double Up) are identical and Chalk-heavy as intended; Large-Field Tournament is
+     all-Contrarian with a KC QB stack (Mahomes, Walker, Rice, Worthy) - passes. Tournament has only a NE stack
+     (Maye + Doubs + Chism) - weaker, 3 players.
+  5. Single Entry / 3-Max has the QB-stack on BUF (Allen, Shakir, Coleman) - passes.
+- Remaining unverified: DK upload-template format (spec section 14 item 3) is confirmed on Nathan's first upload.
+
+OUTSTANDING
+- Plan 2: Streamlit app including the "My Lineup" custom builder (added to the spec); publish to GitHub /
+  Streamlit Cloud; LaunchAgent schedule (Sunday 11:45 run reuses the 9:00 Vegas lines); results import +
+  sidebar guide; USER_MANUAL.
+- Ownership regression after 3 imported weeks of real results.
+- Red-zone shares (revisit if TD allocation proves weak in the report card).
+- Option C: Sleeper blend.
+- Reset the first 8 commits' author email before the first GitHub push.
+- Nathan to decide on tuning for the failed sanity checks above.

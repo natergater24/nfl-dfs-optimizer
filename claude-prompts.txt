@@ -1,0 +1,19 @@
+SESSION LOG - 2026-10-11 / 2026-10-12
+
+Brainstorming decisions
+- Sport: NFL chosen over NBA for the DFS optimizer.
+- Approach A: simulation-based pipeline (Vegas implied totals -> team volume -> player shares ->
+  correlated Monte Carlo -> optimizer -> per-contest pick vs. ownership-weighted field).
+- Contest types use DraftKings' own names (Head-to-Head, 50/50, Double Up, Multiplier, Single Entry /
+  3-Max, Tournament, Large-Field Tournament); main Sunday slate only.
+- No DraftKings login automation or contest entry; DK access limited to the unauthenticated lobby JSON
+  and the official salary CSV export URL (draftables JSON is 403).
+- Odds API key shared with MLB_Pipeline (500/month quota; ~2 units per run).
+- Spec: docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md
+
+Build (Plan 1, branch engine)
+- Executed docs/superpowers/plans/2026-10-12-nfl-dfs-engine.md tasks 1-12 via subagent-driven development.
+- 94 tests passing. Task 12 live dry run on the 2026-10-18 slate: tuesday ~3 s, thursday 1:40,
+  match rate 83%, 9 valid lineups written. Several sanity checks flagged for Nathan (see claude-context.txt);
+  no tuning was done.
+- Next: Nathan decides on tuning, then Plan 2 (app, publishing, scheduling, results import).
