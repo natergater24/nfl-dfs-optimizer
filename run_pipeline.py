@@ -180,6 +180,13 @@ def step_results(today, args) -> str:
             f"{card['weeks']} week(s) of results" + ("; ownership model updated" if model else ""))
 
 
+def _new_results_waiting() -> bool:
+    try:
+        return bool(results.find_new_standings(config.DOWNLOADS, config.RAW / "standings"))
+    except Exception:
+        return True                           # let step_results record the error (e.g. PermissionError) loudly
+
+
 def step_publish(today, args) -> str:
     return publish.publish(config.ROOT, ["data/published", "data/history"], f"Slate update: {args.stage} {today}")
 
@@ -215,6 +222,9 @@ def main(argv=None) -> int:
                         handlers=[logging.StreamHandler(sys.stdout),
                                   logging.FileHandler(config.LOGS / "pipeline.log")])
     today = dt.date.fromisoformat(args.today) if args.today else dt.date.today()
+    if args.stage == "results" and not args.results_file and not _new_results_waiting():
+        log.info("results: no new contest-standings file — nothing to do")   # keep the last import's status
+        return 0
     status_file = "results_status.json" if args.stage == "results" else "run_status.json"
     status = RunStatus(config.PUBLISHED / status_file, args.stage)
     ok = True

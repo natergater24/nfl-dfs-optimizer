@@ -27,7 +27,9 @@ def results_message(results_status: dict) -> str | None:
     if not steps:
         return None
     s = steps[0]
-    return (f"✅ {s['message']}" if s.get("ok") else f"⚠ Results import failed: {s.get('message', '')}")
+    if not s.get("ok"):
+        return f"⚠ Results import failed: {s.get('message', '')}"
+    return s["message"] if s["message"].startswith("skipped") else f"✅ {s['message']}"
 
 
 def _run(stage: str, *extra: str) -> None:

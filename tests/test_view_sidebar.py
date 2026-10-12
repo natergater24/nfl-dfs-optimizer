@@ -10,6 +10,8 @@ def test_results_message():
     assert view_sidebar.results_message(s).startswith("✅ imported 1 file(s)")
     bad = {"steps": [{"name": "results", "ok": False, "message": "ValueError: not a standings file"}]}
     assert view_sidebar.results_message(bad).startswith("⚠")
+    skip = {"steps": [{"name": "results", "ok": True, "message": "skipped: no new contest-standings file"}]}
+    assert "✅" not in view_sidebar.results_message(skip)
 
 
 def test_save_upload(tmp_path):

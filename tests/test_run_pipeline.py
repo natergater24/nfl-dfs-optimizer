@@ -119,11 +119,23 @@ def test_vegas_falls_back_to_recent_lines(tmp_path, monkeypatch):
 
 def test_results_stage_writes_its_own_status(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
+    (tmp_path / "Downloads" / "contest-standings-1.zip").write_bytes(b"PK")
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "results", lambda t, a: "imported 1 file(s)")
     monkeypatch.setitem(run_pipeline.STEP_FUNCS, "publish", lambda t, a: "skipped: test")
     assert run_pipeline.main(["--stage", "results", "--today", "2026-10-19"]) == 0
     status = json.loads((tmp_path / "published" / "results_status.json").read_text())
-    assert status["steps"][0]["message"] == "skipped: no new contest-standings file"
+    assert status["steps"][0]["message"] == "imported 1 file(s)"
     assert not (tmp_path / "published" / "run_status.json").exists()
+
+
+def test_results_stage_without_new_file_touches_nothing(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    (tmp_path / "published").mkdir()
+    prev = b'{"stage": "results", "ok": true, "steps": [{"name": "results", "ok": true, "message": "imported 1"}]}'
+    (tmp_path / "published" / "results_status.json").write_bytes(prev)
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "publish", lambda t, a: pytest.fail("must not publish"))
+    assert run_pipeline.main(["--stage", "results", "--today", "2026-10-19"]) == 0
+    assert (tmp_path / "published" / "results_status.json").read_bytes() == prev
 
 
 def _snapshot_file(tmp_path, date="2026-10-18"):
