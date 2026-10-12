@@ -112,3 +112,34 @@ def test_shares_only_count_games_with_current_team():
     assert out.carry_share.iloc[0] == pytest.approx(by.loc["ATL", "carry_share"])
     out2 = shares.attach_shares(_pool([{"name": "Brian Robinson", "position": "RB", "team": "XXX"}]), sh)
     assert out2.carry_share.iloc[0] == pytest.approx(by.loc["ATL", "carry_share"])
+
+
+def _cap_pool(rows):
+    return _pool([{"carry_share": 0.0, **r} for r in rows])
+
+
+def test_cap_trims_low_evidence_players_first():
+    pool = _cap_pool([{"name": "S", "tgt_share": 0.60, "games": 6},
+                      {"name": "L1", "tgt_share": 0.30, "games": 1},
+                      {"name": "L2", "tgt_share": 0.30, "games": 1},
+                      {"name": "U", "tgt_share": 0.10, "games": 0}])
+    out = shares.redistribute(pool).set_index("name")
+    assert out.loc["S", "tgt_share"] == pytest.approx(0.60)
+    assert out.tgt_share.sum() == pytest.approx(shares.MAX_TEAM_SHARE)
+
+
+def test_cap_falls_back_to_scaling_when_low_evidence_exhausted():
+    pool = _cap_pool([{"name": "S", "tgt_share": 0.9, "games": 6},
+                      {"name": "L", "tgt_share": 0.4, "games": 1}])
+    out = shares.redistribute(pool).set_index("name")
+    scale = shares.MAX_TEAM_SHARE / 1.0     # low-evidence floored at 0.1, total 1.0, then scaled
+    assert out.loc["L", "tgt_share"] == pytest.approx(0.1 * scale)
+    assert out.loc["S", "tgt_share"] == pytest.approx(0.9 * scale)
+    assert out.tgt_share.sum() == pytest.approx(shares.MAX_TEAM_SHARE)
+
+
+def test_attach_shares_adds_games_column():
+    pw, tw = _weeks()
+    out = shares.attach_shares(_pool([{"name": "Kenneth Walker"}, {"name": "Nobody New"},
+                                      {"name": "Chiefs", "position": "DST"}]), shares.compute_shares(pw, tw))
+    assert list(out.games) == [6, 0, 0]

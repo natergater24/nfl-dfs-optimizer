@@ -27,6 +27,8 @@ EFFICIENCY_PRIORS = {
     "ypc": {"QB": 5.0, "RB": 4.3, "WR": 7.0, "TE": 4.0},
 }
 MAX_TEAM_SHARE = 0.97
+LOW_EVIDENCE_GAMES = 3      # players with fewer games with their team are trimmed first by the team cap
+LOW_EVIDENCE_FLOOR = 0.25   # ...but never below this fraction of their current share
 
 
 def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_games: int = 6,
@@ -68,24 +70,24 @@ def attach_shares(pool: pd.DataFrame, shares: pd.DataFrame) -> pd.DataFrame:
     by_team, by_pos = {}, {}
     for r in shares.itertuples(index=False):
         key = normalize_name(r.name)
-        vals = {c: getattr(r, c) for c in SHARE_COLUMNS}
+        vals = {c: getattr(r, c) for c in (*SHARE_COLUMNS, "games")}
         by_team.setdefault((key, r.team, r.position), vals)
         by_pos.setdefault((key, r.position), vals)
     rows = []
     for r in pool.itertuples(index=False):
         if r.position == "DST":
-            rows.append({**{c: 0.0 for c in SHARE_COLUMNS}, "matched": True})
+            rows.append({**{c: 0.0 for c in SHARE_COLUMNS}, "games": 0, "matched": True})
             continue
         key = normalize_name(r.name)
         vals = by_team.get((key, r.team, r.position)) or by_pos.get((key, r.position))
         if vals is None:
             vals = {**UNKNOWN_PLAYER_SHARE[r.position],
-                    **{c: EFFICIENCY_PRIORS[c][r.position] for c in ("catch_rate", "ypt", "ypc")}}
+                    **{c: EFFICIENCY_PRIORS[c][r.position] for c in ("catch_rate", "ypt", "ypc")}, "games": 0}
             rows.append({**vals, "matched": False})
         else:
             rows.append({**vals, "matched": True})
     extra = pd.DataFrame(rows, index=pool.index)
-    return pd.concat([pool.drop(columns=[c for c in (*SHARE_COLUMNS, "matched") if c in pool.columns]), extra],
+    return pd.concat([pool.drop(columns=[c for c in (*SHARE_COLUMNS, "games", "matched") if c in pool.columns]), extra],
                      axis=1)
 
 
@@ -105,6 +107,15 @@ def redistribute(pool: pd.DataFrame) -> pd.DataFrame:
                     pool.loc[base.index, col] = base + lost * w
                 pool.loc[sub.index[out.to_numpy()], col] = 0.0
             total = float(pool.loc[idx, col].sum())
+            if total > MAX_TEAM_SHARE and "games" in pool.columns:
+                excess = total - MAX_TEAM_SHARE
+                low = (pool.loc[idx, "playable"] & (pool.loc[idx, "games"] < LOW_EVIDENCE_GAMES)).to_numpy()
+                low_idx = pd.Index(idx)[low]
+                low_sum = float(pool.loc[low_idx, col].sum())
+                if low_sum > 0:
+                    take = min(excess, low_sum * (1 - LOW_EVIDENCE_FLOOR))
+                    pool.loc[low_idx, col] = pool.loc[low_idx, col] * (1 - take / low_sum)
+                total = float(pool.loc[idx, col].sum())
             if total > MAX_TEAM_SHARE:
                 pool.loc[idx, col] = pool.loc[idx, col] * (MAX_TEAM_SHARE / total)
     return pool
