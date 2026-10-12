@@ -71,8 +71,15 @@ def step_stats(today, args) -> str:
 
 def step_stats_if_missing(today, args) -> str:
     needed = [config.PROCESSED / f for f in ("player_weeks.parquet", "team_weeks.parquet", "team_model.json")]
+    pw_path = config.PROCESSED / "player_weeks.parquet"
     if all(p.exists() for p in needed):
-        return "skipped: stats already built this week"
+        # Tuesday is when the week's games are complete and the scheduled refresh runs.
+        last_tuesday = today - dt.timedelta(days=(today.weekday() - 1) % 7)
+        cutoff = dt.datetime.combine(last_tuesday, dt.time.min).timestamp()
+        if pw_path.stat().st_mtime >= cutoff:
+            pw = pd.read_parquet(pw_path, columns=["season", "week"])
+            season = int(pw.season.max())
+            return f"skipped: stats current through {season} week {int(pw[pw.season == season].week.max())}"
     return step_stats(today, args)
 
 
