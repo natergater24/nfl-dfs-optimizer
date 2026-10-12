@@ -34,7 +34,7 @@ def results_message(results_status: dict) -> str | None:
 
 def _run(stage: str, *extra: str) -> None:
     with st.spinner("Working…"):
-        st.session_state.flash = actions.run_stage(stage, *extra)
+        st.session_state.flash = actions.stage_flash(stage, actions.run_stage(stage, *extra))
     st.cache_resource.clear()
     st.rerun()
 

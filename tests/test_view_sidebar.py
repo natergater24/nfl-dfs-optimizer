@@ -31,4 +31,12 @@ def test_check_results_runs_stage_locally(make_app, published_dir, monkeypatch):
     at = make_app(published_dir, hosted="0")
     at.sidebar.button(key="check_results").click().run()
     assert calls == [("results",)] and not at.exception
-    assert any("imported 1 file" in s.value for s in at.success)
+    assert any("Done — results finished" in s.value for s in at.success)
+
+
+def test_failed_local_action_shows_error_and_log_tail(make_app, published_dir, monkeypatch):
+    monkeypatch.setattr(actions, "run_stage", lambda *a: (False, "Traceback (most recent call last)\nboom"))
+    at = make_app(published_dir, hosted="0")
+    at.sidebar.button(key="check_results").click().run()
+    assert any(e.value == "results failed" for e in at.error)
+    assert any("boom" in c.value for c in at.code)

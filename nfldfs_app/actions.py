@@ -22,6 +22,12 @@ def run_stage(stage: str, *extra: str, run=subprocess.run) -> tuple[bool, str]:
     return r.returncode == 0, "\n".join(lines[-15:])
 
 
+def stage_flash(stage: str, result: tuple[bool, str]) -> tuple[bool, str, str]:
+    """(ok, headline, detail) for the app's flash; warnings come from the reloaded status file, not stdout."""
+    ok, tail = result
+    return (True, f"Done — {stage} finished", "") if ok else (False, f"{stage} failed", tail)
+
+
 def save_upload(uploaded, folder: Path) -> Path:
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)

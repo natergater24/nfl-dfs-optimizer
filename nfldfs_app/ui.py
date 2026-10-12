@@ -15,6 +15,15 @@ KEY_MARKDOWN = (
     "- 🟩 green = soft defense · 🟥 red = tough defense\n\n"
     "_Cash games: lean Chalk. Tournaments: mix in Moderate/Contrarian._")
 
+STEP_LABELS = {"salaries": "DraftKings salaries", "salaries_if_stale": "DraftKings salaries",
+               "stats": "NFL stats", "stats_if_missing": "NFL stats", "vegas": "Vegas lines",
+               "vegas_if_stale": "Vegas lines", "build": "building lineups", "results": "importing results",
+               "publish": "publishing"}
+
+
+def step_label(name: str) -> str:
+    return STEP_LABELS.get(name, name)
+
 
 def money(v) -> str:
     v = int(round(float(v)))

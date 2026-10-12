@@ -35,3 +35,8 @@ def test_save_upload_writes_and_strips_dirs(tmp_path):
     up = SimpleNamespace(name="../../evil/standings.csv", getvalue=lambda: b"abc")
     path = actions.save_upload(up, tmp_path / "sub")
     assert path == tmp_path / "sub" / "standings.csv" and path.read_bytes() == b"abc"
+
+
+def test_stage_flash_headline_comes_from_outcome_not_stdout():
+    assert actions.stage_flash("refresh", (True, "INFO lots of log lines")) == (True, "Done — refresh finished", "")
+    assert actions.stage_flash("results", (False, "Traceback\nboom")) == (False, "results failed", "Traceback\nboom")

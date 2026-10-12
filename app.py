@@ -26,17 +26,22 @@ if data.missing_files(pub):
 d, field_scores = _load(str(pub), data.stamp(pub))
 
 flash = st.session_state.pop("flash", None)
-if flash:
-    (st.success if flash[0] else st.error)(flash[1].splitlines()[-1] if flash[1] else "Done")
-    if not flash[0]:
-        st.code(flash[1])
+if flash:                                        # (ok, headline) or (ok, headline, log tail)
+    (st.success if flash[0] else st.error)(flash[1])
+    if len(flash) > 2 and flash[2]:
+        st.code(flash[2])
 if hosted:
     st.info("📱 This is the hosted copy — view lineups, build variations and download CSVs. Refreshing data and "
             "importing results happen on your Mac and publish here automatically.")
 failed = [s for s in d.run_status.get("steps", []) if s.get("ok") is False]
 if failed:
-    st.error(f"⚠ The last {d.run_status.get('stage', '')} run failed at **{failed[0].get('name', 'a step')}**: "
-             f"{failed[0].get('message', '')}")
+    st.error(f"⚠ The last {d.run_status.get('stage', '')} run failed at "
+             f"**{ui.step_label(failed[0].get('name', 'a step'))}**: {failed[0].get('message', '')}")
+for step in d.run_status.get("steps", []):
+    if str(step.get("message", "")).startswith("WARNING"):
+        st.warning(f"⚠ {ui.step_label(step.get('name', ''))}: {step['message']}")
+if not hosted and str(d.run_status.get("publish", "")).startswith("WARNING"):
+    st.warning(f"The phone copy may be out of date: {d.run_status['publish']}")
 
 labels = {c["label"]: k for k, c in CONTEST_TYPES.items()}
 top = st.columns([3, 3, 1, 1], vertical_alignment="bottom")
@@ -52,7 +57,7 @@ with top[2].popover("ℹ️ Key", width="stretch"):
 if not hosted and top[3].button("⟳ Refresh", width="stretch", key="refresh",
                                 help="Re-fetch injuries and lines, then rebuild lineups (about 2 minutes)"):
     with st.spinner("Refreshing — about 2 minutes…"):
-        st.session_state.flash = actions.run_stage("refresh")
+        st.session_state.flash = actions.stage_flash("refresh", actions.run_stage("refresh"))
     st.cache_resource.clear()
     st.rerun()
 

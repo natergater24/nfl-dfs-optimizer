@@ -26,3 +26,8 @@ def test_styled_lineup_formats_salary(published_dir):
     rec = d.lineups[(d.lineups.contest_key == "fifty_fifty") & (d.lineups["rank"] == 0)]
     html = ui.styled_lineup(rec).to_html()
     assert "$" in html and "," in html and "background-color" in html
+
+
+def test_step_labels_are_plain():
+    assert ui.step_label("vegas_if_stale") == "Vegas lines" and ui.step_label("salaries") == "DraftKings salaries"
+    assert ui.step_label("stats_if_missing") == "NFL stats" and ui.step_label("mystery") == "mystery"
