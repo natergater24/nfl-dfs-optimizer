@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nfldfs.results</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__PROJECT__/scripts/run_stage.sh</string>
+        <string>results</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>__HOME__/Downloads</string>
+    </array>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>WorkingDirectory</key>
+    <string>__PROJECT__</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
