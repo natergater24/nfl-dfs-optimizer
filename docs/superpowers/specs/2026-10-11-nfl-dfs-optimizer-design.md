@@ -13,19 +13,19 @@ A personal tool that, each week, gives Nathan **one recommended DraftKings NFL l
 
 **Success looks like:**
 - Opening the app (laptop or phone) on Sunday shows a fresh, valid lineup for the chosen mode with no manual steps beforehand.
-- Switching between **Cash** and **Tournament (Small / Medium / Large)** instantly changes how the lineup is built.
+- Picking a **DraftKings contest type by its DraftKings name** (Head-to-Head, 50/50, Double Up, Multiplier, Single Entry / 3-Max tournament, Tournament, Large-Field Tournament) instantly shows the lineup built for that contest.
 - Every player shows an estimated ownership % and a common/uncommon tier.
 - Total weekly hands-on time ≈ 2 minutes (plus an optional 2-click results import on Monday).
 - A downloadable CSV uploads straight into DraftKings.
 - Over the season, a report card shows how projections and ownership estimates compared to reality.
 
 **What Nathan said vs. assumptions:**
-- Said: personal use; NFL; DraftKings; starting with 0 entries and experimenting in small Sunday contests; both cash and tournaments; contest-size toggle; ownership common/uncommon labels; minimal upkeep; streamlined refresh; mirror MLB project's Streamlit + git workflow; Vegas-anchored projections (Approach A).
+- Said: personal use; NFL; DraftKings; starting with 0 entries and experimenting in small Sunday contests; both cash and tournaments; contest-type selector using DraftKings' own contest names (2026-10-12); ownership common/uncommon labels; minimal upkeep; streamlined refresh; mirror MLB project's Streamlit + git workflow; Vegas-anchored projections (Approach A).
 - Assumed (confirmed in design discussion): Sunday **main slate**, **Classic** format only; 1–3 lineups per week; entry is manual via CSV upload.
 
 ## 2. Scope
 
-**In scope (v1):** DraftKings NFL Sunday main slate, Classic; cash + 3 tournament sizes; one recommended lineup per mode + outlier swaps; locks/excludes; DK upload CSV export; automated weekly pipeline on Nathan's Mac; hosted read-mostly copy on Streamlit Community Cloud; post-contest results import and report card; sidebar step-by-step import guide.
+**In scope (v1):** DraftKings NFL Sunday main slate, Classic; the 7 DraftKings contest types in §8.1; one recommended lineup per contest type + outlier swaps; locks/excludes; DK upload CSV export; automated weekly pipeline on Nathan's Mac; hosted read-mostly copy on Streamlit Community Cloud; post-contest results import and report card; sidebar step-by-step import guide.
 
 **Out of scope (v1):** Showdown / prime-time / other slates; 150-lineup multi-entry portfolio building; FanDuel or other sites; automated contest entry; any automated DraftKings login; NBA.
 
@@ -53,7 +53,7 @@ A personal tool that, each week, gives Nathan **one recommended DraftKings NFL l
  │  02 nflverse ────┼▶ 04 team env ▶ 05 shares│ ───▶ │ data/  │            └──────────────┘
  │  03 Vegas odds ──┘   ▶ 06 simulate        │      │published│
  │                      ▶ 07 ownership       │      └────────┘
- │                      ▶ 08 lineups (all modes)                          Local app.py
+ │                      ▶ 08 lineups (all types)                          Local app.py
  │                      ▶ 09 publish (commit+push)                       (full: refresh,
  │  10 results import (Downloads watcher)    │                            imports, uploads)
  └───────────────────────────────────────────┘
@@ -70,7 +70,7 @@ All times US Eastern. Jobs are macOS LaunchAgents in `~/Library/LaunchAgents/`, 
 | When | Stage | What runs |
 |---|---|---|
 | Tue 9:00 AM | `tuesday` | Fetch DK main-slate salaries (once); refresh nflverse data through last week |
-| Thu 9:00 AM | `thursday` | Re-attempt DK salary fetch if Tuesday's failed → Vegas lines → projections → simulations → ownership → lineups for every mode → publish |
+| Thu 9:00 AM | `thursday` | Re-attempt DK salary fetch if Tuesday's failed → Vegas lines → projections → simulations → ownership → lineups for every contest type → publish |
 | Sun 9:00 AM | `sunday` | Re-fetch lines + DK player statuses → remove Out/Doubtful → rebuild → publish |
 | Sun 11:45 AM | `sunday` | Same, after inactives are announced (~90 min before 1 PM kickoffs) |
 | On new file in `~/Downloads` | `results` | Import any new `contest-standings-*.zip` (launchd `WatchPaths`) |
@@ -120,34 +120,37 @@ Integer linear program via **PuLP** (bundled CBC; `highspy` as fallback solver i
 - Total salary ≤ **$50,000**; total salary ≥ configurable minimum (default **$49,000**).
 - Roster: exactly 1 QB, 2 RB, 3 WR, 1 TE, 1 FLEX (RB/WR/TE), 1 DST — 9 players, no duplicates.
 - Only main-slate players; exclude Out/Doubtful; honor user locks/excludes.
-- Tournament modes only: QB + ≥1 same-team WR/TE (configurable to ≥2); ≥1 opposing-team skill player ("bring-back"); DST may not face any of the lineup's offensive players.
+- Tournament contest types only: QB + ≥1 same-team WR/TE (configurable to ≥2); ≥1 opposing-team skill player ("bring-back"); DST may not face any of the lineup's offensive players.
 
-**Objective by mode** (weights live in `config.py`, tunable):
+**Contest types** — the app's selector uses DraftKings' own contest-type names (exact lobby wording verified against Nathan's screenshots at build time). Each maps to an objective and a sim "success" test; all weights/thresholds live in `config.py`, tunable:
 
-| Mode | Objective per player |
-|---|---|
-| Cash | `0.5·floor + 0.5·median` |
-| Tournament — Small (≤ 1K entries) | `ceiling − 0.05·own%` |
-| Tournament — Medium (1K–20K) | `ceiling − 0.15·own%` |
-| Tournament — Large (20K+) | `ceiling − 0.30·own%` |
+| DraftKings contest type | Group | Objective per player | Pick the candidate with the highest… |
+|---|---|---|---|
+| **Head-to-Head** | Cash | `0.5·floor + 0.5·median` | P(beat one random field lineup) |
+| **50/50** | Cash | `0.5·floor + 0.5·median` | P(finish in top 50% of field) |
+| **Double Up** | Cash | `0.5·floor + 0.5·median` | P(finish in top ~44% of field) |
+| **Multiplier** (3x / 5x / 10x sub-choice) | Between | `0.5·median + 0.5·ceiling − 0.05·own%` | P(finish in top 1/3, 1/5 or 1/10) |
+| **Single Entry / 3-Max Tournament** (small fields, ≤ ~1K) | Tournament | `ceiling − 0.05·own%` | P(finish in top 1%) |
+| **Tournament** (~1K–20K entries) | Tournament | `ceiling − 0.15·own%` | P(finish in top 1%) |
+| **Large-Field Tournament** (20K+, e.g. Millionaire Maker) | Tournament | `ceiling − 0.30·own%` | P(finish in top 1%) |
+
+Stacking rules apply to the Tournament group (and optionally Multiplier, off by default).
 
 ### 8.2 Candidates → simulation pick
-1. For each mode, generate **~150 distinct candidates**: each solve perturbs projections with a random draw from the simulation matrix, plus a uniqueness constraint (each new lineup differs from all previous ones by ≥ 3 players).
+1. For each contest type, generate **~150 distinct candidates**: each solve perturbs projections with a random draw from the simulation matrix, plus a uniqueness constraint (each new lineup differs from all previous ones by ≥ 3 players).
 2. Build a **simulated field** of ~2,000 opponent lineups by sampling players in proportion to estimated ownership under the same salary/roster rules.
 3. Score every candidate and the field across all simulations (matrix multiply on the simulation matrix).
-4. Pick per mode:
-   - **Cash:** highest P(candidate ≥ field median), i.e. cashing in a 50/50-style contest.
-   - **Tournaments:** highest P(candidate ≥ field's top-1% score).
+4. Pick per contest type using the "highest…" column in §8.1.
 5. Store the pick, the runner-up candidates, and their sim stats.
 
 ### 8.3 Outlier swaps
-For the chosen lineup in each mode, list **5–8 single-player swaps** that keep the lineup valid and under the cap, ranked by the mode's objective with emphasis on 💎/Moderate players with high boom rate. Each shows salary delta, remaining salary, ceiling/median delta, and ownership tier.
+For the chosen lineup in each contest type, list **5–8 single-player swaps** that keep the lineup valid and under the cap, ranked by that contest type's objective with emphasis on 💎/Moderate players with high boom rate. Each shows salary delta, remaining salary, ceiling/median delta, and ownership tier.
 
 ## 9. App (`app.py`) — single page + sidebar
 
-**Header:** slate name + game count, "Updated N min ago" (color-coded like MLB), mode toggle (Cash | Tournament), contest-size toggle (Small | Medium | Large, tournament only), Refresh button (local only). A **red banner** appears only when a pipeline step failed, naming the step and the fix.
+**Header:** slate name + game count, "Updated N min ago" (color-coded like MLB), **DraftKings contest type** selector (the 7 names in §8.1, grouped Cash / Multiplier / Tournament; a 3x/5x/10x sub-choice appears for Multiplier), Refresh button (local only). A **red banner** appears only when a pipeline step failed, naming the step and the fix.
 
-**Recommended lineup panel:** position, player, team, salary, median, floor, ceiling, ownership % + tier; total salary / $50,000; stack summary; one-sentence "why this lineup"; sim result ("Cashes in X% of sims" / "Top-1% in X% of sims"); **Download DraftKings upload CSV**.
+**Recommended lineup panel:** position, player, team, salary, median, floor, ceiling, ownership % + tier; total salary / $50,000; stack summary; one-sentence "why this lineup"; sim result in that contest's terms ("Wins the head-to-head in X% of sims" / "Cashes in X% of sims" / "Top-1% in X% of sims"); **Download DraftKings upload CSV**.
 
 **Outliers panel:** swap rows with **Apply swap**; applying re-validates and re-scores against the simulation matrix in seconds. Session keeps the user's variations; one CSV exports all of them.
 
@@ -162,7 +165,7 @@ For the chosen lineup in each mode, list **5–8 single-player swaps** that keep
 - **Check for results** button; **Upload results** (fallback); **Upload DKSalaries.csv** (fallback).
 - Odds API quota remaining; model accuracy stats.
 
-**Hosted vs. local** (same rule as MLB): hosted app shows everything, allows mode switches, swaps, locks and CSV download (not persisted). Refresh, imports and uploads work only locally; hosted app shows a banner explaining this with an "Open local app" link.
+**Hosted vs. local** (same rule as MLB): hosted app shows everything, allows contest-type switches, swaps, locks and CSV download (not persisted). Refresh, imports and uploads work only locally; hosted app shows a banner explaining this with an "Open local app" link.
 
 ## 10. Repository layout
 
@@ -170,7 +173,7 @@ For the chosen lineup in each mode, list **5–8 single-player swaps** that keep
 NFL_DFS/
   app.py                      Streamlit app
   run_pipeline.py             --stage tuesday|thursday|sunday|results  [--refresh]
-  config.py                   mode weights, thresholds, sim counts, tier cutoffs
+  config.py                   contest-type weights, thresholds, sim counts, tier cutoffs
   launch.sh                   run sunday-stage refresh → restart Streamlit → open browser
   src/
     01_fetch_dk_salaries.py   DK endpoint fetch (+ CSV loader)
@@ -231,7 +234,7 @@ Python: system Python 3.14 at the full path (same convention as MLB). Key deps: 
 ## 14. Items to verify during build (not design decisions)
 
 1. DK lobby/draft-group/draftables endpoint shapes and main-slate identification.
-2. DK contest-standings export click-path (via Nathan's screenshots) and zip contents/format.
+2. DK lobby contest-type names (for the selector) and the contest-standings export click-path (via Nathan's screenshots) and zip contents/format.
 3. DK bulk-upload CSV template header format.
 4. DK scoring values against DK's current published NFL rules.
 5. `nflreadpy` availability on Python 3.14 (fallback `nfl_data_py`).
