@@ -152,6 +152,14 @@ def step_build(today, args) -> str:
             + (f"; unmatched: {', '.join(res['unmatched'][:10])}" if res["unmatched"] else ""))
 
 
+def _set_aside(f: Path, folder: Path) -> None:
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(f), str(folder / f.name))
+    except OSError:
+        log.exception("couldn't move %s to %s", f, folder)
+
+
 def step_results(today, args) -> str:
     done = config.RAW / "standings"
     files = ([Path(args.results_file)] if getattr(args, "results_file", None)
@@ -159,25 +167,43 @@ def step_results(today, args) -> str:
     if not files:
         return "skipped: no new contest-standings file"
     done.mkdir(parents=True, exist_ok=True)
-    hist, slates = None, []
-    for f in files:
-        downloaded = dt.date.fromtimestamp(f.stat().st_mtime)
-        snap = results.latest_slate_snapshot(config.SLATES, min(today, downloaded))
-        if snap is None:
-            raise RuntimeError(f"No built slate on or before {min(today, downloaded)} to match {f.name} to — "
-                               "results can only be imported for slates this app built.")
-        slate_date, dg = results.snapshot_key(snap)
-        rows = results.match_to_slate(results.read_standings(f), pd.read_parquet(snap), slate_date, dg)
-        hist = results.append_history(config.HISTORY / "results.parquet", rows)
-        shutil.move(str(f), str(done / f.name))
-        slates.append(slate_date)
-    card = results.report_card(hist)
-    atomic_write_text(config.PUBLISHED / "report_card.json", json.dumps(card, indent=2))
-    model = ownership.fit_ownership_model(hist)
-    if model:
-        atomic_write_text(config.PROCESSED / "ownership_model.json", json.dumps(model, indent=2))
-    return (f"imported {len(files)} file(s) for the {', '.join(sorted(set(slates)))} slate; "
-            f"{card['weeks']} week(s) of results" + ("; ownership model updated" if model else ""))
+    hist, slates, imported, skipped = None, [], [], []
+    for f in files:                           # one bad file must not block the others
+        try:
+            downloaded = dt.date.fromtimestamp(f.stat().st_mtime)
+            snap = results.latest_slate_snapshot(config.SLATES, min(today, downloaded))
+            if snap is None:
+                raise RuntimeError(f"No built slate on or before {min(today, downloaded)} to match {f.name} to — "
+                                   "results can only be imported for slates this app built.")
+            slate_date, dg = results.snapshot_key(snap)
+            standings, snap_df = results.read_standings(f), pd.read_parquet(snap)
+            share = results.match_share(standings, snap_df)
+            if share < results.MIN_STANDINGS_MATCH:
+                skipped.append(f"skipped {f.name}: only {share:.0%} of its players are on the {slate_date} slate "
+                               "(wrong contest?)")
+                _set_aside(f, done / "skipped")
+                continue
+            hist = results.append_history(config.HISTORY / "results.parquet",
+                                          results.match_to_slate(standings, snap_df, slate_date, dg))
+            shutil.move(str(f), str(done / f.name))
+            slates.append(slate_date)
+            imported.append(f"{f.name} ({share:.0%} matched)")
+        except Exception as e:
+            log.exception("results file %s failed", f)
+            skipped.append(f"skipped {f.name}: {type(e).__name__}: {e}")
+            _set_aside(f, done / "skipped")
+    msg = f"imported {len(imported)} file(s)"
+    if hist is not None:
+        card = results.report_card(hist)
+        atomic_write_text(config.PUBLISHED / "report_card.json", json.dumps(card, indent=2))
+        model = ownership.fit_ownership_model(hist)
+        if model:
+            atomic_write_text(config.PROCESSED / "ownership_model.json", json.dumps(model, indent=2))
+        msg += (f" for the {', '.join(sorted(set(slates)))} slate ({', '.join(imported)}); "
+                f"{card['weeks']} week(s) of results" + ("; ownership model updated" if model else ""))
+    if skipped:
+        raise RuntimeError(f"{msg}; " + "; ".join(skipped))
+    return msg
 
 
 def _new_results_waiting() -> bool:

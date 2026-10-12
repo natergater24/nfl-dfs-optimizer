@@ -22,6 +22,7 @@ STANDINGS_GLOB = "contest-standings-*.zip"
 REQUIRED_COLUMNS = ("Player", "%Drafted", "FPTS")
 HISTORY_COLUMNS = ["slate_date", "draft_group_id", "dk_id", "name", "position", "team", "salary", "median",
                    "floor", "ceiling", "own_pct", "implied_total", "opp_implied", "actual_own", "actual_pts"]
+MIN_STANDINGS_MATCH = 0.80          # below this share of names on our slate, the file is the wrong contest
 _SNAPSHOT = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\w+)\.parquet$")
 
 
@@ -72,6 +73,17 @@ def latest_slate_snapshot(slates_dir, as_of: dt.date) -> Path | None:
         if m and dt.date.fromisoformat(m.group(1)) <= as_of and (best is None or m.group(1) > best[0]):
             best = (m.group(1), p)
     return best[1] if best else None
+
+
+def match_share(standings: pd.DataFrame, snapshot: pd.DataFrame) -> float:
+    """Share of the standings' players (non-empty names) found among the snapshot's playable players."""
+    names = standings["name"].astype(str).str.strip()
+    names = names[names != ""]
+    if names.empty:
+        return 0.0
+    snap = snapshot[snapshot["playable"]] if "playable" in snapshot.columns else snapshot
+    on_slate = set(snap["name"].map(normalize_name))
+    return float(names.map(normalize_name).isin(on_slate).mean())
 
 
 def match_to_slate(standings: pd.DataFrame, snapshot: pd.DataFrame, slate_date: str,

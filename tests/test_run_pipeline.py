@@ -176,6 +176,47 @@ def test_step_results_matches_by_download_date(tmp_path, monkeypatch):
     assert "2026-10-18" in msg                                    # not the 10/25 slate
 
 
+def _wrong_contest_zip(path):
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("contest-standings-9.csv",
+                   "Rank,EntryId,EntryName,TimeRemaining,Points,Lineup,,Player,Roster Position,%Drafted,FPTS\n"
+                   "1,1,someone,0,100,x,,AAA QB1,QB,30.00%,22.0\n"
+                   + "".join(f",,,,,,,Other Player{i},WR,5.00%,9.0\n" for i in range(9)))
+    return path
+
+
+def _monday(*paths):
+    ts = dt.datetime(2026, 10, 19, 9, 0).timestamp()
+    for p in paths:
+        os.utime(p, (ts, ts))
+
+
+def test_step_results_skips_wrong_contest_file(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _snapshot_file(tmp_path)
+    z = _wrong_contest_zip(tmp_path / "Downloads" / "contest-standings-9.zip")
+    _monday(z)
+    with pytest.raises(RuntimeError, match="wrong contest"):
+        run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert not z.exists() and (tmp_path / "raw" / "standings" / "skipped" / z.name).exists()
+    assert not (tmp_path / "history" / "results.parquet").exists()
+
+
+def test_step_results_bad_file_does_not_block_good_one(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _snapshot_file(tmp_path)
+    bad = tmp_path / "Downloads" / "contest-standings-0.zip"
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("notes.txt", "not a csv")
+    good = _standings_zip(tmp_path / "Downloads" / "contest-standings-1.zip")
+    _monday(bad, good)
+    with pytest.raises(RuntimeError) as e:
+        run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "contest-standings-0.zip" in str(e.value) and "imported 1 file" in str(e.value)
+    assert (tmp_path / "raw" / "standings" / good.name).exists()
+    assert (tmp_path / "raw" / "standings" / "skipped" / bad.name).exists()
+    assert len(pd.read_parquet(tmp_path / "history" / "results.parquet"))
+    assert json.loads((tmp_path / "published" / "report_card.json").read_text())["weeks"] == 1
+
+
 def _stage_with_publish(tmp_path, monkeypatch, a_fn):
     monkeypatch.setattr(config, "PUBLISHED", tmp_path / "published")
     monkeypatch.setattr(config, "LOGS", tmp_path / "logs")

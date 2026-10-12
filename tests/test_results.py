@@ -93,3 +93,12 @@ def test_append_history_dedups_and_report_card(tmp_path):
     assert lat["proj_mae"] == pytest.approx(5.47, abs=0.01)
     assert 0 <= lat["in_range_pct"] <= 100 and lat["own_mae"] >= 0
     assert results.report_card(pd.DataFrame(columns=results.HISTORY_COLUMNS)) == {"weeks": 0}
+
+
+def test_match_share_counts_standings_players_on_the_slate(tmp_path):
+    s = results.read_standings(_zip(tmp_path / "c.zip"))
+    assert results.match_share(s, _snapshot()) == 1.0
+    other = CSV + ",,,,,,,Joe Burrow,QB,10.00%,20\n,,,,,,,Ja'Marr Chase,WR,9.00%,15\n"
+    s2 = results.read_standings(_zip(tmp_path / "d.zip", other))
+    assert results.match_share(s2, _snapshot()) == pytest.approx(3 / 5)
+    assert results.MIN_STANDINGS_MATCH == 0.80
