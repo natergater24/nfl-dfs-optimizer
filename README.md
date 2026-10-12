@@ -18,6 +18,10 @@ and Vegas lines (The Odds API). Personal use; never logs in to DraftKings or ent
 
 Outputs land in `data/published/` (lineups, swaps, player pool, upload CSV, run status).
 
+`data/published/dk_upload_recommended.csv` has one row per contest type, in this order: Head-to-Head,
+50/50, Double Up, Multiplier 3x, 5x, 10x, Single Entry / 3-Max, Tournament, Large-Field Tournament.
+Upload only the row(s) you want (plus the header) to DraftKings.
+
 ## How it works
 Spec: `docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md`.
 Vegas implied totals → expected team volume → player shares → 10,000 correlated game

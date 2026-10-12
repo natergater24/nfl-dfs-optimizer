@@ -6,7 +6,7 @@ contest type (Head-to-Head, 50/50, Double Up, Multiplier 3x/5x/10x, Single Entry
 Tournament, Large-Field Tournament). Never logs in to DraftKings or enters contests.
 Spec: docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md
 Plan 1 (engine, this build): docs/superpowers/plans/2026-10-12-nfl-dfs-engine.md
-Branch: engine. Run via ./py (system Python 3.14). Tests: ./py -m pytest -q (94 pass).
+Branch: engine. Run via ./py (system Python 3.14). Tests: ./py -m pytest -q (109 pass, also clean under -W error).
 
 MODULE MAP
 NFL_DFS/
@@ -49,19 +49,38 @@ DELIBERATE DEVIATIONS FROM THE SPEC
 LIVE DRY RUN (2026-10-12, slate Sun 2026-10-18, draft group 154941)
 - tuesday: exit 0, 513 players, 10 games; stats through 2026 week 5; team model on 1788 team-games. ~3 s.
 - thursday: exit 0, wall time 1:40 (target < 10 min); Vegas 15 games with lines, Odds API 498 requests left;
-  build: 9 contest types, name match rate 83% (pool match flag 81%), 407 playable players.
+  build: 9 contest types, name match rate 83%, 407 playable players.
 - All 9 recommended lineups validate and are <= $50,000; upload CSV = header + 9 rows. 8 swaps per contest type.
-- Sanity checks that FAILED / need Nathan's decision (nothing was tuned):
-  1. Match rate 83% < 90% target. Unmatched are mostly 2026 rookies/backups/$4,000 filler (e.g. Ty Simpson,
-     Cade Klubnik), but 67 of the 95 unmatched are flagged playable.
-  2. Median points too low outside QB: top RB/WR medians 14.0/11.5 (target ~15-22); TE 8.2. QB 22.2/21.5/18.3 ok;
-     DST 7-8 ok. Cause candidate: team model coefficients are weak (pass_yds slope 8.27/pt of implied total).
-  3. Ownership: position totals match SLOT_TOTALS (QB 100, RB 230, WR 355, TE 115, DST 100) but 60% cap is hit by
-     several players (e.g. Kyren Williams, Jaylen Warren, Zay Flowers, Tyler Higbee) -> several 60.0 values.
+- Sanity checks after the fix wave (re-run of --stage build on the same downloaded data; no API quota):
+  1. Name match rate 83% (offense, playable). Unmatched are 2026 rookies/backups/$4,000 filler (Ty Simpson,
+     Cade Klubnik, ...); they get small conservative UNKNOWN_PLAYER_SHARE roles. Accepted.
+  2. Medians (top by position): QB Josh Allen 22.8, RB Kyren Williams 19.4, WR Zay Flowers 14.9,
+     TE Brock Bowers 13.6, DST Chiefs 8.0. Bijan Robinson carry 0.50 / median 15.1; Puka Nacua tgt 0.21 /
+     median 14.5; Kyren Williams carry 0.50 / median 19.4; Jeremiyah Love carry 0.41 tgt 0.055 / median 7.3;
+     Justin Herbert carry 0.15 / median 13.2. Star WR medians are ~1 pt under the 15 sanity floor: accepted
+     (median, not mean, projection; further tuning waits for the weekly report card).
+  3. Ownership: 2 players are pinned at the 60% ownership cap (Puka Nacua, Kyren Williams); before the fix wave
+     it was 3 (Jaylen Warren, Kyren Williams, Tyler Higbee). Position totals match SLOT_TOTALS. Per-team usage
+     share totals are held at the 0.97 cap. Accepted; ownership regression waits for real results.
   4. Cash lineups (H2H/50-50/Double Up) are identical and Chalk-heavy as intended; Large-Field Tournament is
-     all-Contrarian with a KC QB stack (Mahomes, Walker, Rice, Worthy) - passes. Tournament has only a NE stack
-     (Maye + Doubs + Chism) - weaker, 3 players.
-  5. Single Entry / 3-Max has the QB-stack on BUF (Allen, Shakir, Coleman) - passes.
+     all-Contrarian with a stack; Single Entry / 3-Max has a QB stack. Pass.
+- Task 6b diagnosis (compressed usage shares), three causes, all fixed: (a) shrinkage toward average-starter
+  priors pulled depth players UP so team sums exceeded the cap and scaled starters down -> replacement-level
+  priors, shrink by unweighted games, k=0.5; (b) a player's last 6 games on ANY team were credited to his
+  current team -> shares measured per (player, team); (c) many small floor shares summed past the cap ->
+  the cap trims low-evidence (<3 games) players first (never below 25% of their share) before scaling anyone.
+- Final-wave fix (stale redistribution): redistribute() handed every non-playable player's share to teammates,
+  including long-term IR players whose absence teammates' recent shares already reflect (ARI got 0.66 carry share
+  from Conner/Benson; Herbert got Trey Lance's carries). compute_shares now emits team_games_since (that team's
+  games after the player's last one); only players with team_games_since <= RECENT_ABSENCE_GAMES (1) are
+  redistributed, stale ones are zeroed. Effect: Jeremiyah Love carry 0.426 -> 0.408,
+  tgt 0.098 -> 0.055; Justin Herbert carry 0.253 -> 0.151, median 14.6 -> 13.2.
+- Other final-wave fixes: Odds API errors no longer include the URL/apiKey (RuntimeError, from None);
+  thursday/sunday re-run stats if player_weeks.parquet is older than the last Tuesday 00:00 (skip message states
+  the data's season/week); a DK lobby block gives the same --salary-csv guidance as the CSV fetch.
+- Accepted rulings: T5 team-model coefficients (pass_yds slope ~10/pt implied total) accepted; shrinkage by
+  games; per-team share measurement; projections accepted as above; subagent commit trailers carry their own
+  model name; first 8 commits keep the hostname author email (reset before first GitHub push).
 - Remaining unverified: DK upload-template format (spec section 14 item 3) is confirmed on Nathan's first upload.
 
 OUTSTANDING
@@ -72,4 +91,4 @@ OUTSTANDING
 - Red-zone shares (revisit if TD allocation proves weak in the report card).
 - Option C: Sleeper blend.
 - Reset the first 8 commits' author email before the first GitHub push.
-- Nathan to decide on tuning for the failed sanity checks above.
+- Tuning: none pending; revisit with the weekly report card against real results.

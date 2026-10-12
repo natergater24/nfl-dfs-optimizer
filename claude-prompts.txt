@@ -13,7 +13,9 @@ Brainstorming decisions
 
 Build (Plan 1, branch engine)
 - Executed docs/superpowers/plans/2026-10-12-nfl-dfs-engine.md tasks 1-12 via subagent-driven development.
-- 94 tests passing. Task 12 live dry run on the 2026-10-18 slate: tuesday ~3 s, thursday 1:40,
-  match rate 83%, 9 valid lineups written. Several sanity checks flagged for Nathan (see claude-context.txt);
-  no tuning was done.
-- Next: Nathan decides on tuning, then Plan 2 (app, publishing, scheduling, results import).
+- 109 tests passing (also under -W error). Task 12 live dry run on the 2026-10-18 slate: tuesday ~3 s,
+  thursday 1:40, match rate 83%, 9 valid lineups written. Task 6b fixed compressed usage shares (three causes,
+  see claude-context.txt); the final fix wave stopped redistributing long-stale injured players' shares, hid the
+  Odds API key from errors/logs, made thursday/sunday rebuild stale stats, and gave plain guidance for a blocked
+  DK lobby. Top medians now QB 22.8 / RB 19.4 / WR 14.9 / TE 13.6 / DST 8.0; 2 players pinned at the 60% ownership cap.
+- Next: Plan 2 (app, publishing, scheduling, results import). No tuning decisions are pending.

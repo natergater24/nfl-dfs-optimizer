@@ -68,7 +68,8 @@ def test_write_upload_csv_header_and_rows(pool, tmp_path):
     good = _lineup(pool, _valid_ids(pool))
     path = tmp_path / "upload.csv"
     dk_rules.write_upload_csv([good, good], path)
-    rows = list(csv.reader(path.open()))
+    with path.open() as f:
+        rows = list(csv.reader(f))
     assert rows[0] == ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
     assert len(rows) == 3 and sorted(map(int, rows[1])) == sorted(good.dk_id.tolist())
 
