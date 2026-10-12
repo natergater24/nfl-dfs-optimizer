@@ -41,7 +41,12 @@ def fetch_lobby(session=None) -> dict:
     s = session or requests.Session()
     r = s.get(LOBBY_URL, headers=HEADERS, timeout=30)
     r.raise_for_status()
-    return r.json()
+    try:
+        return r.json()
+    except ValueError:
+        raise RuntimeError("DraftKings returned something other than the contest lobby (it may be blocking "
+                           "automated requests). Download DKSalaries.csv from any main-slate contest "
+                           "and run with --salary-csv PATH.") from None
 
 
 def fetch_salary_csv(slate: dict, session=None) -> str:

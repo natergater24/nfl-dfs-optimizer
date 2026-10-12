@@ -79,3 +79,22 @@ def test_fetch_salary_csv_rejects_html():
     s = _Session(_Resp("<HTML><HEAD><TITLE>Access Denied</TITLE>"))
     with pytest.raises(RuntimeError, match="DKSalaries.csv"):
         dk_salaries.fetch_salary_csv({"draft_group_id": 1, "contest_type_id": 21}, session=s)
+
+
+def test_fetch_lobby_non_json_gives_plain_guidance():
+    class R:
+        text = "<html>Access denied</html>"
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            raise json.JSONDecodeError("Expecting value", self.text, 0)
+
+    class S:
+        def get(self, *a, **k):
+            return R()
+
+    with pytest.raises(RuntimeError, match="--salary-csv PATH") as e:
+        dk_salaries.fetch_lobby(S())
+    assert e.value.__suppress_context__ is True
