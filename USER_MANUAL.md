@@ -24,7 +24,7 @@ Run these in Terminal, in the NFL_DFS folder:
 Your Mac must be plugged in. It wakes itself 5 minutes before each run.
 
 ## Your 2 minutes on Sunday
-1. Open the app — on your phone (the Streamlit link) or on the Mac (double-click **Launch_NFL_DFS** on the Desktop).
+1. Open the app — on your phone (https://nfl-dfs-optimizer.streamlit.app/) or on the Mac (double-click **Launch_NFL_DFS** on the Desktop).
 2. Pick the **DraftKings contest type** you're entering (top of the page).
 3. Use the ⭐ **Recommended** lineup, or build your own in 🛠 **My Lineup**.
 4. Click **Download** and upload that CSV on DraftKings (Lineups → Upload Lineups).
@@ -42,6 +42,18 @@ Green matchup = soft defense, red = tough defense.
 ## After Sunday's games (optional, 2 clicks)
 Follow **📥 How to import last week's results** in the app's sidebar. The 📈 report card then shows how
 close the projections were. After 3 imported weeks, ownership estimates start learning from your results.
+
+## If a scheduled run was missed
+- **Mac asleep:** the missed run happens as soon as it wakes.
+- **Mac off or logged out:** the run doesn't happen.
+- Each later run catches up: Thursday covers a missed Tuesday, Sunday 9:00 covers a missed Thursday, and
+  Sunday 11:45 covers a missed 9:00.
+- **How to notice:** look at the header. **Last refreshed** shows when the lineups were last built; its color is
+  green under 1 hour old, orange under 1 day, red older. **Next automatic refresh** shows when the next run is due.
+- **What to do on the Mac:** open the app (double-click **Launch_NFL_DFS** on the Desktop) and click
+  **⟳ Refresh data now**. Or in Terminal, in the NFL_DFS folder: `./py run_pipeline.py --stage sunday`
+- **On the phone:** **🔄 Get latest** only loads what the Mac has already published. If the time is still old,
+  check injuries yourself before entering.
 
 ## If something goes wrong
 - **A red banner at the top** says which step failed and what to do. Most fix themselves on the next run.

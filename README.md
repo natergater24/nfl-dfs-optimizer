@@ -12,7 +12,7 @@ and Vegas lines (The Odds API). Personal use; never logs in to DraftKings or ent
 
 ## Weekly use
 Everything runs on a schedule; see `USER_MANUAL.md` for the plain-language weekly guide.
-- Hosted copy (phone): (set after Streamlit Cloud deploy)
+- Hosted copy (phone): https://nfl-dfs-optimizer.streamlit.app/
 - Local app: `bash launch.sh` then open http://localhost:8502 (or the Desktop launcher once created)
 - Stages, each runnable with `./py run_pipeline.py --stage <name>`: `tuesday`, `thursday`, `sunday`,
   `sunday_late`, `refresh`, `results`, `build`

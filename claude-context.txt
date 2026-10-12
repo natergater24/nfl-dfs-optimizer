@@ -107,12 +107,19 @@ Branch `app`. 189 tests pass.
 - Builder keeps working when a lineup player is ruled out (OUT tag, export blocked).
 - Schedule: weekly LaunchAgents. The sunday agent uses AbandonProcessGroup so the keep-awake survives to 11:45.
   LaunchAgents only run while Nathan is logged in on the Mac.
-- Hosted URL: (set after Streamlit Cloud deploy)
+- Hosted URL: https://nfl-dfs-optimizer.streamlit.app/
 
+DONE 2026-10-12 (Nathan): schedule installed; pmset wake verified (Tue/Thu/Sun 8:55); Desktop launcher made;
+GitHub push and Streamlit Cloud deploy complete.
 OUTSTANDING (pending Nathan)
-- Schedule install + pmset + Downloads-access check (Task 11 Step 6).
-- GitHub repo + first push + Streamlit Cloud deploy (Task 12); first 8 commits' author email reset before push.
 - Finalize the DraftKings import-guide wording from Nathan's screenshots (Task 13 Step 1).
 OUTSTANDING (modeling)
 - Red-zone shares; option C (Sleeper blend); matchup as a projection input (decide from the report card);
   historical backtest (spec section 12); review the report card after 3-4 weeks.
+
+=== 2026-10-12: refresh note + Get latest (branch refresh-note) ===
+- Header shows "Last refreshed: <ET time> · <age> · next automatic refresh: <ET time>" (ui.to_eastern,
+  ui.format_refresh, ui.next_scheduled_refresh; ui.SCHEDULE_ET mirrors scripts/launchagents, weekday Mon=0).
+- Hosted copy has "🔄 Get latest" (key get_latest: clears cache, reruns, shows "Up to date" with the new time);
+  local button renamed "⟳ Refresh data now". tzdata added to requirements.txt. USER_MANUAL gained
+  "If a scheduled run was missed". 209 tests pass under -W error.

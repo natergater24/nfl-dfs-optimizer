@@ -32,3 +32,11 @@ Build (Plan 2, branch app)
 - Docs batch: USER_MANUAL.md, README and context updates, devcontainer for Codespaces.
 - Pending Nathan: schedule install/pmset/Downloads check, GitHub repo + push + Streamlit Cloud, import-guide
   wording from screenshots.
+
+SESSION LOG - 2026-10-12 (refresh note)
+
+Request (approved by Nathan in chat)
+- Header shows when the lineups were last refreshed and when the next automatic refresh is due (US Eastern).
+- Phone gets a "Get latest" button; Mac button renamed "Refresh data now".
+- Document what happens when a scheduled run is missed; add the phone link (nfl-dfs-optimizer.streamlit.app).
+- Done on branch refresh-note, 209 tests passing under -W error.
