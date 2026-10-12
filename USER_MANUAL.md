@@ -1,5 +1,17 @@
 # NFL DFS Lineups — User Manual
 
+## One-time setup (already done if Claude set it up with you)
+Run these in Terminal, in the NFL_DFS folder:
+1. Turn on the weekly schedule: `bash scripts/install_schedule.sh`
+2. Let the Mac wake itself before each run: `sudo pmset repeat wakeorpoweron TRU 08:55:00` (it asks for your
+   Mac password). Check it with `pmset -g sched`; stop it with `sudo pmset repeat cancel`.
+3. Let the app read your Downloads folder. If the sidebar ever says **"Results import failed: PermissionError"**:
+   open **System Settings → Privacy & Security → Full Disk Access**, click **+**, press **⌘⇧G**, paste
+   `/Library/Frameworks/Python.framework/Versions/3.14/Resources/Python.app`, click **Open**, then switch it on.
+4. Stay logged in on the Mac and keep it plugged in — scheduled runs only happen while you're logged in.
+5. The Mac app keeps the Mac awake while it's open. Quit it when you're done: **Ctrl+C** in its Terminal
+   window, or run `pkill -f "streamlit run app.py"`.
+
 ## What happens automatically each week
 | When | What your Mac does |
 |---|---|
@@ -37,6 +49,11 @@ close the projections were. After 3 imported weeks, ownership estimates start le
   contest, click **Export to CSV**, then in the Mac app's sidebar use **Upload DKSalaries.csv**.
 - **"The Odds API request failed"**: the monthly free limit may be used up (shared with the MLB app). The app
   reuses lines up to 48 hours old automatically.
+- **"Results import failed: PermissionError"**: the Mac can't read your Downloads folder — follow step 3 of
+  **One-time setup** above, then click **Check for results**.
+- **"skipped … (wrong contest?)"**: that results file wasn't from the Sunday main slate (e.g. a showdown or
+  another week). It was moved to `data/raw/standings/skipped`. Export last Sunday's **main-slate** contest
+  instead.
 - **The phone copy didn't update**: check `logs/pipeline.log` on the Mac for the `publish` line.
 
 ## Useful commands (Terminal, in the NFL_DFS folder)
