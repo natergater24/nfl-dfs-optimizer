@@ -23,5 +23,7 @@
     <string>__PROJECT__</string>
     <key>RunAtLoad</key>
     <false/>
+    <key>AbandonProcessGroup</key>
+    <true/>
 </dict>
 </plist>

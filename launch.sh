@@ -6,9 +6,13 @@ LOG="$PROJECT/logs/streamlit.log"
 mkdir -p "$PROJECT/logs"
 cd "$PROJECT" || exit 1
 pkill -f "streamlit run app.py --server.headless true --server.port 8502" 2>/dev/null || true
-sleep 1
+# Wait (up to 5 s) for the old server to release port 8502 before starting a new one.
+for _ in 1 2 3 4 5; do
+    lsof -i :8502 -sTCP:LISTEN >/dev/null 2>&1 || break
+    sleep 1
+done
 nohup caffeinate -i "$STREAMLIT" run app.py --server.headless true --server.port 8502 >> "$LOG" 2>&1 &
-for _ in 1 2 3 4 5 6 7 8 9 10; do
+for _ in $(seq 1 30); do
     sleep 1
     if lsof -i :8502 -sTCP:LISTEN >/dev/null 2>&1; then
         open -a "Google Chrome" http://localhost:8502 2>/dev/null || open http://localhost:8502

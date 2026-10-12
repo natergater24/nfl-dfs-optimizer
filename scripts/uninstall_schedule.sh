@@ -7,3 +7,5 @@ for f in "$AGENTS"/com.nfldfs.*.plist; do
     rm -f "$f"
     echo "removed $(basename "$f" .plist)"
 done
+echo
+echo "To also stop the automatic wake-ups: sudo pmset repeat cancel"

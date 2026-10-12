@@ -35,3 +35,9 @@ def test_scripts_parse_and_are_executable(script):
     path = ROOT / script
     assert path.stat().st_mode & 0o111
     subprocess.run(["bash", "-n", str(path)], check=True)
+
+
+def test_sunday_agent_abandons_process_group():
+    # run_stage.sh leaves a background caffeinate running through the 11:45 run;
+    # launchd must not kill it when the 9:00 job exits.
+    assert _render("sunday")["AbandonProcessGroup"] is True
