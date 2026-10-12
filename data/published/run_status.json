@@ -1,13 +1,13 @@
 {
   "stage": "build",
-  "started": "2026-10-12T14:20:16",
-  "finished": "2026-10-12T14:22:18",
+  "started": "2026-10-12T16:11:06",
+  "finished": "2026-10-12T16:13:14",
   "ok": true,
   "steps": [
     {
       "name": "build",
-      "started": "2026-10-12T14:20:16",
-      "finished": "2026-10-12T14:22:18",
+      "started": "2026-10-12T16:11:06",
+      "finished": "2026-10-12T16:13:14",
       "ok": true,
       "message": "9 contest types built; name match rate 83%; unmatched: Ahmani Marshall, Al-Jay Henderson, Andrew Armstrong, Antwane Wells Jr., Ben Mann, Brandon Smith, Brennan Presley, Brock Lampe, CJ Daniels, CJ Dippre"
     }

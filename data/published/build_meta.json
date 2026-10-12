@@ -6,7 +6,8 @@
   "source": "draftkings",
   "players": 513,
   "fetched_at": "2026-10-12T10:02:06",
-  "built_at": "2026-10-12T14:22:18",
+  "built_at": "2026-10-12T16:13:14",
+  "built_at_utc": "2026-10-12T20:13:14+00:00",
   "n_sims": 10000,
   "match_rate": 0.8294573643410853,
   "unmatched": [
