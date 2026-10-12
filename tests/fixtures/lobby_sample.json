@@ -1,0 +1,10 @@
+{
+  "DraftGroups": [
+    {"DraftGroupId": 154488, "ContestTypeId": 96, "GameTypeId": 96, "GameCount": 1, "StartDateEst": "2026-10-12T20:15:00.0000000", "DraftGroupTag": "Featured"},
+    {"DraftGroupId": 154856, "ContestTypeId": 145, "GameTypeId": 145, "GameCount": 14, "StartDateEst": "2026-10-15T20:15:00.0000000", "DraftGroupTag": ""},
+    {"DraftGroupId": 154900, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": 7, "StartDateEst": "2026-10-18T13:00:00.0000000", "DraftGroupTag": ""},
+    {"DraftGroupId": 154941, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": 10, "StartDateEst": "2026-10-18T13:00:00.0000000", "DraftGroupTag": "Featured"},
+    {"DraftGroupId": 154950, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": 3, "StartDateEst": "2026-10-18T16:05:00.0000000", "DraftGroupTag": ""},
+    {"DraftGroupId": 153728, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": 11, "StartDateEst": "2026-11-01T13:00:00.0000000", "DraftGroupTag": ""}
+  ]
+}
