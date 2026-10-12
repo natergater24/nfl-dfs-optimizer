@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,9 @@ from .config import (CANDIDATE_PERTURBATION, CONTEST_TYPES, FIELD_SIZE, MIN_SALA
                      MIN_UNIQUE_PLAYERS, N_CANDIDATES, N_SWAPS, SALARY_CAP, SEED, SWAP_MAX_OWN_TOURNAMENT)
 from .dk_rules import ROSTER_SLOTS, assign_slots
 from .optimizer import InfeasibleError, solve_lineup
-from .sim_eval import contest_metric, lineup_scores, sample_field, thresholds
+from .sim_eval import contest_metric, field_ownership, lineup_scores, sample_field, thresholds
+
+log = logging.getLogger("nfldfs.lineups")
 
 LINEUP_COLUMNS = ["contest_key", "contest_label", "contest_group", "rank", "slot", "dk_id", "name", "position",
                   "team", "opp", "kickoff", "salary", "median", "floor", "ceiling", "own_pct", "tier",
@@ -78,11 +81,24 @@ def find_swaps(pool, sims, lineup: list[int], contest: dict, field_scores, n: in
     return df.drop_duplicates("in_dk_id").head(n).reset_index(drop=True)[SWAP_COLUMNS]
 
 
+def _warn_ownership_conflict(pool: pd.DataFrame, field: np.ndarray) -> None:
+    got = field_ownership(pool, field)
+    diff = (got - pool["own_pct"].astype(float)).abs()
+    bad = diff[diff > 15].sort_values(ascending=False).head(10)
+    if len(bad):
+        items = "; ".join(f"{pool.loc[i, 'name']} est {pool.loc[i, 'own_pct']:.0f}% / field {got[i]:.0f}%"
+                          for i in bad.index)
+        log.warning("Simulated field ownership differs from the estimates by >15 points for: %s. "
+                    "The ownership estimates cannot all co-exist under the salary cap.", items)
+
+
 def build_all(pool: pd.DataFrame, sims: np.ndarray, *, contest_types: dict = CONTEST_TYPES,
               n_candidates: int = N_CANDIDATES, field_size: int = FIELD_SIZE, seed: int = SEED,
               keep_top: int = 3, min_salary: int = MIN_SALARY_DEFAULT) -> tuple[pd.DataFrame, pd.DataFrame]:
     rng = np.random.default_rng(seed)
-    field_scores = lineup_scores(sims, sample_field(pool, field_size, rng))
+    field = sample_field(pool, field_size, rng)
+    field_scores = lineup_scores(sims, field)
+    _warn_ownership_conflict(pool, field)
     cache: dict[str, list[list[int]]] = {}
     lineup_rows, swap_frames = [], []
     by_id = pool.set_index("dk_id")
