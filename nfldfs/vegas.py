@@ -14,10 +14,18 @@ ODDS_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
 def fetch_odds(api_key: str, session=None) -> tuple[list[dict], str | None]:
     """One request (costs 2 quota units: spreads + totals, US region)."""
     s = session or requests.Session()
-    r = s.get(ODDS_URL, params={"apiKey": api_key, "regions": "us", "markets": "spreads,totals",
-                                "oddsFormat": "american"}, timeout=30)
-    r.raise_for_status()
-    return r.json(), r.headers.get("x-requests-remaining")
+    try:
+        r = s.get(ODDS_URL, params={"apiKey": api_key, "regions": "us", "markets": "spreads,totals",
+                                    "oddsFormat": "american"}, timeout=30)
+        r.raise_for_status()
+        return r.json(), r.headers.get("x-requests-remaining")
+    except requests.HTTPError as e:
+        # requests' messages embed the full URL (with apiKey=...); never let that reach logs or run_status.json
+        status = getattr(e.response, "status_code", "error")
+        raise RuntimeError(f"The Odds API request failed (HTTP {status}): the monthly quota may be used up or "
+                           "ODDS_API_KEY may be invalid. Check odds_meta.json for requests remaining.") from None
+    except requests.RequestException:
+        raise RuntimeError("Could not reach The Odds API (network error). Try again later.") from None
 
 
 def parse_odds(events: list[dict]) -> pd.DataFrame:
