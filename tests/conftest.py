@@ -41,3 +41,12 @@ def make_pool() -> pd.DataFrame:
 @pytest.fixture
 def pool() -> pd.DataFrame:
     return make_pool()
+
+
+@pytest.fixture
+def team_exp() -> pd.DataFrame:
+    return pd.DataFrame({
+        "team": ["AAA", "BBB", "CCC", "DDD"],
+        "exp_pass_att": 34.0, "exp_pass_yds": 240.0, "exp_pass_td": 1.6, "exp_ints": 0.8,
+        "exp_carries": 26.0, "exp_rush_yds": 115.0, "exp_rush_td": 0.9,
+    }).set_index("team")
