@@ -156,6 +156,13 @@ For the chosen lineup in each contest type, list **5–8 single-player swaps** t
 
 **Player pool (expander):** every player, sortable/filterable by position, tier, value; 🔒 lock / ✖ exclude, then **Rebuild with my locks**.
 
+**My Lineup builder (added 2026-10-12):** a separate panel next to the recommended lineup.
+- Nine empty slots (QB, RB, RB, WR, WR, WR, TE, FLEX, DST). Each slot picks from **every playable player on the slate** eligible for that slot, searchable, showing salary, median/floor/ceiling and ownership tier.
+- **Start from:** blank, or a copy of any contest type's recommended lineup or alternates, then change any slot freely.
+- Live totals: salary used / remaining against $50,000 (over-cap shown in red, and export disabled), projected median/floor/ceiling, and the selected contest type's simulated result for this lineup ("Cashes in X% of sims" / "Top-1% in X% of sims"), scored against the published simulations so it is comparable to the recommended lineup.
+- Side-by-side comparison table: recommended lineup vs. My Lineup.
+- Save several custom lineups in the session and download any or all of them in the DraftKings upload CSV (validated by `dk_rules` first; an invalid lineup can't be exported). Works on the hosted app too (not persisted between visits).
+
 **Report card (expander):** last week's projections vs. actual points and estimated vs. actual ownership; season-to-date accuracy.
 
 **Pre-lock warning:** if a lineup player's DK status changed to Out/Doubtful after the last refresh → "⚠ Re-run Refresh".
