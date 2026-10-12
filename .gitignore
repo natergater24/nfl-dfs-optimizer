@@ -1,0 +1,15 @@
+# Secrets — never commit real keys
+env.txt
+*env*.txt
+!env.txt.example
+.env
+
+# Built data and logs (Plan 2 un-ignores the published files the hosted app needs)
+data/
+logs/
+
+# Python / OS
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
