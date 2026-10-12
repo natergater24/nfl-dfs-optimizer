@@ -143,3 +143,48 @@ def test_attach_shares_adds_games_column():
     out = shares.attach_shares(_pool([{"name": "Kenneth Walker"}, {"name": "Nobody New"},
                                       {"name": "Chiefs", "position": "DST"}]), shares.compute_shares(pw, tw))
     assert list(out.games) == [6, 0, 0]
+
+
+def test_team_games_since_counts_team_games_after_players_last():
+    rows, trows = [], []
+    for season, wk in [(2025, 17), (2025, 18), (2026, 1), (2026, 2), (2026, 3)]:
+        trows.append(dict(season=season, week=wk, team="ARI", targets=30, carries=25))
+        if (season, wk) in [(2025, 17), (2025, 18)]:
+            rows.append(dict(player_id="IR1", name="Hurt Back", position="RB", team="ARI", season=season, week=wk,
+                             targets=2, receptions=1, rec_yds=5.0, carries=10, rush_yds=40.0))
+        if (season, wk) != (2026, 3):
+            rows.append(dict(player_id="R2", name="Almost Healthy", position="RB", team="ARI", season=season,
+                             week=wk, targets=2, receptions=1, rec_yds=5.0, carries=5, rush_yds=20.0))
+        rows.append(dict(player_id="R3", name="Everyday", position="RB", team="ARI", season=season, week=wk,
+                         targets=2, receptions=1, rec_yds=5.0, carries=5, rush_yds=20.0))
+    sh = shares.compute_shares(pd.DataFrame(rows), pd.DataFrame(trows)).set_index("player_id")
+    assert sh.loc["IR1", "team_games_since"] == 3
+    assert sh.loc["R2", "team_games_since"] == 1
+    assert sh.loc["R3", "team_games_since"] == 0
+
+
+def test_attach_shares_carries_team_games_since_with_sentinel():
+    pw, tw = _weeks()
+    out = shares.attach_shares(_pool([{"name": "Kenneth Walker"}, {"name": "Nobody New"},
+                                      {"name": "Chiefs", "position": "DST"}]), shares.compute_shares(pw, tw))
+    assert list(out.team_games_since) == [0, shares.NO_HISTORY_GAMES_SINCE, shares.NO_HISTORY_GAMES_SINCE]
+
+
+def test_stale_injured_players_share_is_zeroed_not_redistributed():
+    pool = _pool([{"name": "StaleIR", "position": "RB", "carry_share": 0.4, "tgt_share": 0.0, "playable": False,
+                   "team_games_since": 20},
+                  {"name": "Active", "position": "RB", "carry_share": 0.3, "tgt_share": 0.0,
+                   "team_games_since": 0}])
+    out = shares.redistribute(pool).set_index("name")
+    assert out.loc["StaleIR", "carry_share"] == 0.0
+    assert out.loc["Active", "carry_share"] == pytest.approx(0.3)
+
+
+def test_recently_out_player_share_is_still_redistributed():
+    pool = _pool([{"name": "JustOut", "position": "RB", "carry_share": 0.4, "tgt_share": 0.0, "playable": False,
+                   "team_games_since": 0},
+                  {"name": "Active", "position": "RB", "carry_share": 0.3, "tgt_share": 0.0,
+                   "team_games_since": 0}])
+    out = shares.redistribute(pool).set_index("name")
+    assert out.loc["JustOut", "carry_share"] == 0.0
+    assert out.loc["Active", "carry_share"] == pytest.approx(0.7)

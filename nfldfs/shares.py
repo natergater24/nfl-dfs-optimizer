@@ -29,6 +29,10 @@ EFFICIENCY_PRIORS = {
 MAX_TEAM_SHARE = 0.97
 LOW_EVIDENCE_GAMES = 3      # players with fewer games with their team are trimmed first by the team cap
 LOW_EVIDENCE_FLOOR = 0.25   # ...but never below this fraction of their current share
+# A non-playable player's share is handed to teammates only if he played the team's latest game(s): older
+# absences are already reflected in the teammates' own recent shares (moving them again double counts).
+RECENT_ABSENCE_GAMES = 1
+NO_HISTORY_GAMES_SINCE = 99   # sentinel for players with no team history (unmatched, DST)
 
 
 def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_games: int = 6,
@@ -53,6 +57,11 @@ def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_ga
         carries=("carries", "sum"), rush_yds=("rush_yds", "sum"),
     ).reset_index()
     g = g.sort_values(["player_id", "last_t"], ascending=[True, False], kind="stable").reset_index(drop=True)
+    tw_t = (team_weeks.season * 100 + team_weeks.week).groupby(team_weeks.team).apply(
+        lambda t: np.sort(t.unique()))
+    g["team_games_since"] = [
+        int(len(tw_t[t]) - np.searchsorted(tw_t[t], lt, side="right")) if t in tw_t.index else 0
+        for t, lt in zip(g.team, g.last_t)]
     prior = lambda key: g.position.map(lambda p: POSITION_PRIORS[p][key])
     eff = lambda key: g.position.map(EFFICIENCY_PRIORS[key])
     obs_t = np.where(g.w_team_targets > 0, g.w_targets / g.w_team_targets.where(g.w_team_targets > 0, 1), 0.0)
@@ -62,7 +71,7 @@ def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_ga
     g["catch_rate"] = (g.receptions + 10 * eff("catch_rate")) / (g.targets + 10)
     g["ypt"] = (g.rec_yds + 20 * eff("ypt")) / (g.targets + 20)
     g["ypc"] = (g.rush_yds + 20 * eff("ypc")) / (g.carries + 20)
-    return g[["player_id", "name", "position", "team", "games", "n_eff", *SHARE_COLUMNS]]
+    return g[["player_id", "name", "position", "team", "games", "n_eff", "team_games_since", *SHARE_COLUMNS]]
 
 
 def attach_shares(pool: pd.DataFrame, shares: pd.DataFrame) -> pd.DataFrame:
@@ -70,24 +79,25 @@ def attach_shares(pool: pd.DataFrame, shares: pd.DataFrame) -> pd.DataFrame:
     by_team, by_pos = {}, {}
     for r in shares.itertuples(index=False):
         key = normalize_name(r.name)
-        vals = {c: getattr(r, c) for c in (*SHARE_COLUMNS, "games")}
+        vals = {c: getattr(r, c) for c in (*SHARE_COLUMNS, "games", "team_games_since")}
         by_team.setdefault((key, r.team, r.position), vals)
         by_pos.setdefault((key, r.position), vals)
     rows = []
     for r in pool.itertuples(index=False):
         if r.position == "DST":
-            rows.append({**{c: 0.0 for c in SHARE_COLUMNS}, "games": 0, "matched": True})
+            rows.append({**{c: 0.0 for c in SHARE_COLUMNS}, "games": 0, "team_games_since": NO_HISTORY_GAMES_SINCE, "matched": True})
             continue
         key = normalize_name(r.name)
         vals = by_team.get((key, r.team, r.position)) or by_pos.get((key, r.position))
         if vals is None:
             vals = {**UNKNOWN_PLAYER_SHARE[r.position],
-                    **{c: EFFICIENCY_PRIORS[c][r.position] for c in ("catch_rate", "ypt", "ypc")}, "games": 0}
+                    **{c: EFFICIENCY_PRIORS[c][r.position] for c in ("catch_rate", "ypt", "ypc")}, "games": 0,
+                    "team_games_since": NO_HISTORY_GAMES_SINCE}
             rows.append({**vals, "matched": False})
         else:
             rows.append({**vals, "matched": True})
     extra = pd.DataFrame(rows, index=pool.index)
-    return pd.concat([pool.drop(columns=[c for c in (*SHARE_COLUMNS, "games", "matched") if c in pool.columns]), extra],
+    return pd.concat([pool.drop(columns=[c for c in (*SHARE_COLUMNS, "games", "team_games_since", "matched") if c in pool.columns]), extra],
                      axis=1)
 
 
@@ -99,7 +109,10 @@ def redistribute(pool: pd.DataFrame) -> pd.DataFrame:
             for pos in ("QB", "RB", "WR", "TE"):
                 m_pos = sub.position == pos
                 out = m_pos & ~sub.playable
-                lost = float(sub.loc[out, col].sum())
+                movable = out
+                if "team_games_since" in sub.columns:
+                    movable = out & (sub.team_games_since <= RECENT_ABSENCE_GAMES)
+                lost = float(sub.loc[movable, col].sum())
                 recv = m_pos & sub.playable
                 if lost > 0 and recv.any():
                     base = sub.loc[recv, col]
