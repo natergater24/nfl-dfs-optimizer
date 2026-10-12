@@ -7,11 +7,12 @@ import pandas as pd
 from .teams import normalize_name
 
 SHARE_COLUMNS = ("tgt_share", "carry_share", "catch_rate", "ypt", "ypc")
+# Replacement-level (backup) priors: the share a depth player is assumed to have before evidence.
 POSITION_PRIORS = {
-    "QB": {"tgt_share": 0.0, "carry_share": 0.10},
-    "RB": {"tgt_share": 0.06, "carry_share": 0.25},
-    "WR": {"tgt_share": 0.12, "carry_share": 0.01},
-    "TE": {"tgt_share": 0.09, "carry_share": 0.0},
+    "QB": {"tgt_share": 0.0, "carry_share": 0.03},
+    "RB": {"tgt_share": 0.03, "carry_share": 0.08},
+    "WR": {"tgt_share": 0.05, "carry_share": 0.0},
+    "TE": {"tgt_share": 0.04, "carry_share": 0.0},
 }
 # Players DraftKings lists that have no nflverse history (rookies, call-ups): small, conservative roles.
 UNKNOWN_PLAYER_SHARE = {
@@ -29,7 +30,7 @@ MAX_TEAM_SHARE = 0.97
 
 
 def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_games: int = 6,
-                   half_life: float = 3.0, k: float = 2.0) -> pd.DataFrame:
+                   half_life: float = 3.0, k: float = 0.5) -> pd.DataFrame:
     tw = team_weeks[["season", "week", "team", "targets", "carries"]].rename(
         columns={"targets": "team_targets", "carries": "team_carries"})
     df = player_weeks.merge(tw, on=["season", "week", "team"], how="left").fillna(
@@ -52,8 +53,8 @@ def compute_shares(player_weeks: pd.DataFrame, team_weeks: pd.DataFrame, *, n_ga
     eff = lambda key: g.position.map(EFFICIENCY_PRIORS[key])
     obs_t = np.where(g.w_team_targets > 0, g.w_targets / g.w_team_targets.where(g.w_team_targets > 0, 1), 0.0)
     obs_c = np.where(g.w_team_carries > 0, g.w_carries / g.w_team_carries.where(g.w_team_carries > 0, 1), 0.0)
-    g["tgt_share"] = (g.n_eff * obs_t + k * prior("tgt_share")) / (g.n_eff + k)
-    g["carry_share"] = (g.n_eff * obs_c + k * prior("carry_share")) / (g.n_eff + k)
+    g["tgt_share"] = (g.games * obs_t + k * prior("tgt_share")) / (g.games + k)
+    g["carry_share"] = (g.games * obs_c + k * prior("carry_share")) / (g.games + k)
     g["catch_rate"] = (g.receptions + 10 * eff("catch_rate")) / (g.targets + 10)
     g["ypt"] = (g.rec_yds + 20 * eff("ypt")) / (g.targets + 20)
     g["ypc"] = (g.rush_yds + 20 * eff("ypc")) / (g.carries + 20)

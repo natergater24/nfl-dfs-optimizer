@@ -18,7 +18,7 @@ def test_compute_shares_recency_weighted_and_shrunk():
     pw, tw = _weeks()
     s = shares.compute_shares(pw, tw).iloc[0]
     n_eff = sum(0.5 ** (age / 3.0) for age in range(6))
-    expected = (n_eff * 0.25 + 2.0 * shares.POSITION_PRIORS["WR"]["tgt_share"]) / (n_eff + 2.0)
+    expected = (6 * 0.25 + 0.5 * shares.POSITION_PRIORS["WR"]["tgt_share"]) / (6 + 0.5)
     assert s.tgt_share == pytest.approx(expected, rel=1e-6)
     assert s.games == 6 and s.n_eff == pytest.approx(n_eff)
     assert s.catch_rate == pytest.approx((36 + 10 * 0.64) / (60 + 10))
@@ -74,3 +74,21 @@ def test_redistribute_caps_team_total():
     pool = _pool([{"name": n, "tgt_share": 0.4, "carry_share": 0.0} for n in "XYZ"])
     out = shares.redistribute(pool)
     assert out.tgt_share.sum() == pytest.approx(shares.MAX_TEAM_SHARE)
+
+
+def test_starter_share_survives_team_cap():
+    rows, trows = [], []
+    for wk in range(1, 7):
+        rows.append(dict(player_id="S", name="Starter", position="RB", team="KC", season=2026, week=wk,
+                         targets=0, receptions=0, rec_yds=0.0, carries=17, rush_yds=70.0))
+        trows.append(dict(season=2026, week=wk, team="KC", targets=35, carries=26))
+    for i in range(3):
+        rows.append(dict(player_id=f"B{i}", name=f"Backup{i}", position="RB", team="KC", season=2026, week=6,
+                         targets=0, receptions=0, rec_yds=0.0, carries=1, rush_yds=4.0))
+    pw, tw = pd.DataFrame(rows), pd.DataFrame(trows)
+    sh = shares.compute_shares(pw, tw)
+    pool = pd.DataFrame([dict(name=n, position="RB", team="KC", playable=True)
+                         for n in ["Starter", "Backup0", "Backup1", "Backup2"]])
+    out = shares.redistribute(shares.attach_shares(pool, sh))
+    assert out.loc[out.name == "Starter", "carry_share"].iloc[0] >= 0.55
+    assert out.carry_share.sum() <= shares.MAX_TEAM_SHARE + 1e-9
