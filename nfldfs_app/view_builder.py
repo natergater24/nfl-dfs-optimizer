@@ -12,11 +12,13 @@ from nfldfs_app import ui
 from nfldfs_app.scoring import published_metric
 
 BUILDER_FIELDS = ["dk_id", "name", "position", "team", "opp", "salary", "median", "ceiling", "own_pct", "tier",
-                  "score", "value", "mu_color", "mu_text", "mu_label"]
+                  "score", "value", "mu_color", "mu_text", "mu_label", "out"]
 
 
-def builder_records(pool: pd.DataFrame, weights: dict) -> list[dict]:
-    play = pool[pool["playable"]].copy()
+def builder_records(pool: pd.DataFrame, weights: dict, lineup_ids=()) -> list[dict]:
+    keep = {int(i) for i in lineup_ids if i is not None}
+    play = pool[pool["playable"] | pool["dk_id"].isin(keep)].copy()
+    play["out"] = ~play["playable"].astype(bool)
     play["score"] = (weights.get("floor", 0) * play["floor"] + weights.get("median", 0) * play["median"]
                      + weights.get("ceiling", 0) * play["ceiling"] - weights.get("own_penalty", 0) * play["own_pct"])
     play["value"] = play["median"] / (play["salary"] / 1000)
@@ -99,7 +101,7 @@ def render(d, key, label, field_scores):
     else:
         from nfldfs_app.builder_component import lineup_builder
         res = lineup_builder(key="builder", on_lineup_change=lambda: None, data={
-            "pool": builder_records(d.pool, contest["weights"]), "lineup": ids, "slots": list(ROSTER_SLOTS),
+            "pool": builder_records(d.pool, contest["weights"], ids), "lineup": ids, "slots": list(ROSTER_SLOTS),
             "cap": SALARY_CAP, "focus_slot": st.session_state.get("focus_slot"),
             "focus_token": st.session_state.get("focus_token")})
         value = getattr(res, "lineup", None)

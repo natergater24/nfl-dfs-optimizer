@@ -51,6 +51,7 @@ CSS = """
 .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); margin-left: 4px; }
 .colhdr { display: grid; grid-template-columns: 1fr 70px 92px 70px; gap: 8px; padding: 0 10px 4px; color: var(--muted); font-size: 12px; }
 .colhdr span:not(:first-child) { text-align: right; }
+.tag.out { color: #fff; background: var(--bad); border-color: var(--bad); }
 .mu { color: #fff; font-weight: 600; font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; cursor: help; }
 """
 
@@ -73,8 +74,8 @@ export default function (component) {
   const money = v => '$' + Math.round(v).toLocaleString();
   const k = v => money(v);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const mu = p => `<span class="mu" style="background:${p.mu_color}" title="${esc(p.mu_text)}">vs ${p.opp} · ${p.mu_label}</span>`;
-  const used = () => lineup.reduce((a, id) => a + (id ? byId.get(id).salary : 0), 0);
+  const mu = p => `<span class="mu" style="background:${esc(p.mu_color)}" title="${esc(p.mu_text)}">vs ${esc(p.opp)} · ${esc(p.mu_label)}</span>`;
+  const used = () => lineup.reduce((a, id) => a + (id && byId.get(id) ? byId.get(id).salary : 0), 0);
   const fits = (i, p) => ELIG[SLOTS[i]].includes(p.position);
 
   function commit() { setStateValue('lineup', { ids: lineup, t: Date.now() }); }
@@ -84,7 +85,7 @@ export default function (component) {
     const from = lineup.indexOf(id);
     if (from >= 0 && from !== i) {             // moving a lineup player (e.g. RB -> FLEX): swap the two slots
       const other = lineup[i];
-      lineup[from] = other != null && fits(from, byId.get(other)) ? other : null;
+      lineup[from] = other != null && byId.get(other) && fits(from, byId.get(other)) ? other : null;
     }
     lineup[i] = id;
     UI.selSlot = null; UI.selPlayer = null;
@@ -92,6 +93,7 @@ export default function (component) {
   }
 
   function shell() {
+    root.tabIndex = 0;
     root.innerHTML = `
       <div class="lb">
         <div><div class="hdr"><b>Your lineup</b><span class="cap" id="cap"></span></div>
@@ -127,12 +129,13 @@ export default function (component) {
     cap.textContent = `${money(u)} / ${money(CAP)} · ${u <= CAP ? money(CAP - u) + ' left' : money(u - CAP) + ' over'}`;
     cap.className = 'cap' + (u > CAP ? ' over' : '');
     root.querySelector('#slots').innerHTML = SLOTS.map((s, i) => {
-      const id = lineup[i], p = id ? byId.get(id) : null;
-      const cls = ['slot', p ? '' : 'empty', UI.selSlot === i ? 'sel' : '',
+      const id = lineup[i], p = id ? byId.get(id) : null, gone = id && !p;
+      const cls = ['slot', p || gone ? '' : 'empty', UI.selSlot === i ? 'sel' : '',
                    sp ? (fits(i, sp) ? 'target' : 'dim') : ''].join(' ');
-      const body = p ? `<div><div class="nm">${esc(p.name)}</div><div class="meta">${p.team} ${mu(p)} · ${k(p.salary)} · ${p.median.toFixed(1)} pts · ${ICON[p.tier]}</div></div>`
+      const body = gone ? `<div class="nm">— unavailable — remove and pick a replacement</div>`
+                     : p ? `<div><div class="nm">${esc(p.name)}${p.out ? '<span class="tag out">OUT</span>' : ''}</div><div class="meta">${esc(p.team)} ${mu(p)} · ${k(p.salary)} · ${p.median.toFixed(1)} pts · ${ICON[p.tier]}</div></div>`
                      : `<div class="nm">— empty — drop or pick a ${s === 'FLEX' ? 'RB/WR/TE' : s}</div>`;
-      return `<div class="${cls}" data-i="${i}"><span class="pos">${s}</span>${body}${p ? `<button class="x" data-rm="${i}" title="Remove">×</button>` : '<span></span>'}</div>`;
+      return `<div class="${cls}" data-i="${i}"><span class="pos">${s}</span>${body}${p || gone ? `<button class="x" data-rm="${i}" title="Remove">×</button>` : '<span></span>'}</div>`;
     }).join('');
     const hint = root.querySelector('#hint');
     hint.textContent = sp ? `Click a highlighted slot (or drag) to put ${sp.name} in. Gray slots can't take a ${sp.position}.`
@@ -145,8 +148,8 @@ export default function (component) {
 
   function renderList() {
     const f = activeFilter(), q = UI.q.trim().toLowerCase(), u = used();
-    const selSlot = UI.selSlot, curSal = selSlot != null && lineup[selSlot] ? byId.get(lineup[selSlot]).salary : 0;
-    let rows = pool.filter(p => (f === 'ALL' || (f === 'FLEX' ? ELIG.FLEX : [f]).includes(p.position))
+    const selSlot = UI.selSlot, curSal = selSlot != null && lineup[selSlot] && byId.get(lineup[selSlot]) ? byId.get(lineup[selSlot]).salary : 0;
+    let rows = pool.filter(p => !p.out && (f === 'ALL' || (f === 'FLEX' ? ELIG.FLEX : [f]).includes(p.position))
       && (!q || (p.name + ' ' + p.team).toLowerCase().includes(q)));
     const leftAfter = p => CAP - (u - curSal) - p.salary;
     if (UI.afford && selSlot != null) rows = rows.filter(p => leftAfter(p) >= 0 || lineup.includes(p.dk_id));
@@ -162,7 +165,7 @@ export default function (component) {
       const after = selSlot != null && !inlu ? `<div class="sub left ${la < 0 ? 'neg' : ''}">${la < 0 ? money(-la) + ' over' : money(la) + ' left'}</div>` : '';
       return `<div class="${cls}" data-id="${p.dk_id}" draggable="${!inlu}">
         <div><div class="nm">${esc(p.name)}${inlu ? '<span class="tag">in lineup</span>' : ''}</div>
-             <div class="meta">${p.position} · ${p.team} ${mu(p)}</div></div>
+             <div class="meta">${esc(p.position)} · ${esc(p.team)} ${mu(p)}</div></div>
         <div class="num">${k(p.salary)}${after}</div>
         <div class="num">${p.median.toFixed(1)} / ${p.ceiling.toFixed(1)}<div class="sub">${p.value.toFixed(2)} pts/$1K</div></div>
         <div class="num">${p.own_pct.toFixed(0)}%<div class="sub">${ICON[p.tier]}</div></div></div>`;

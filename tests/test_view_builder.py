@@ -23,6 +23,18 @@ def test_builder_records(published_dir):
     assert abs(r["score"] - (row.ceiling - 0.30 * row.own_pct)) < 1e-2
 
 
+def test_builder_records_keeps_out_lineup_player(published_dir):
+    d = _d(published_dir)
+    w = CONTEST_TYPES["large_tournament"]["weights"]
+    pool = d.pool.copy()
+    out_ids = pool.dk_id[pool.playable].astype(int).tolist()[:2]
+    pool.loc[pool.dk_id.isin(out_ids), "playable"] = False
+    recs = view_builder.builder_records(pool, w, [out_ids[0]])
+    by = {r["dk_id"]: r for r in recs}
+    assert by[out_ids[0]]["out"] is True and out_ids[1] not in by
+    assert all(r["out"] is False for i, r in by.items() if i != out_ids[0])
+
+
 def test_apply_builder_value():
     cur = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert view_builder.apply_builder_value(None, None, cur) == (None, None)
