@@ -217,7 +217,8 @@ def main(argv=None) -> int:
     status_file = "results_status.json" if args.stage == "results" else "run_status.json"
     status = RunStatus(config.PUBLISHED / status_file, args.stage)
     ok = True
-    for name in STAGES[args.stage]:
+    steps = STAGES[args.stage]
+    for name in [n for n in steps if n != "publish"]:
         log.info("── %s ──", name)
         try:
             with status.step(name) as rec:
@@ -228,6 +229,14 @@ def main(argv=None) -> int:
             ok = False
             break
     status.finish(ok)
+    if "publish" in steps:                    # after finish, so the committed status is final (even on failure)
+        try:
+            msg = STEP_FUNCS["publish"](today, args) or ""
+        except Exception as e:
+            msg = f"WARNING: publishing failed — {type(e).__name__}"
+        log.info("publish: %s", msg)
+        status.data["publish"] = msg
+        status._write()                       # local-only record of the publish outcome
     return 0 if ok else 1
 
 

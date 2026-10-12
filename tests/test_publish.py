@@ -47,3 +47,27 @@ def test_publish_push_failure_is_a_warning(repo):
 
 def test_publish_not_a_repo(tmp_path):
     assert publish(tmp_path, ["data/published"], "x") == "skipped: not a git repository"
+
+
+def _fake_run(push_stderr="", raises=None):
+    def run(cmd, **kw):
+        if raises:
+            raise raises
+        sub = cmd[3]
+        rc = {"diff": 1, "push": 1 if push_stderr else 0}.get(sub, 0)
+        out = "origin" if sub == "remote" else ""
+        return subprocess.CompletedProcess(cmd, rc, stdout=out, stderr=push_stderr if sub == "push" else "")
+    return run
+
+
+def test_publish_never_raises(repo):
+    (repo / "data/published/d.json").write_text("{}")
+    msg = publish(repo, ["data/published"], "x", run=_fake_run(raises=ValueError("boom")))
+    assert msg.startswith("WARNING: publishing failed")
+
+
+def test_publish_redacts_credentials(repo):
+    (repo / "data/published/e.json").write_text("{}")
+    msg = publish(repo, ["data/published"], "x",
+                  run=_fake_run(push_stderr="fatal: https://user:tok@github.com/x.git denied"))
+    assert "://***@" in msg and "tok" not in msg

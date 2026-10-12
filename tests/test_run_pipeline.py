@@ -162,3 +162,31 @@ def test_step_results_matches_by_download_date(tmp_path, monkeypatch):
     os.utime(z, (monday, monday))                                 # downloaded the Monday after 10/18
     msg = run_pipeline.step_results(dt.date(2026, 10, 27), SimpleNamespace(results_file=None))
     assert "2026-10-18" in msg                                    # not the 10/25 slate
+
+
+def _stage_with_publish(tmp_path, monkeypatch, a_fn):
+    monkeypatch.setattr(config, "PUBLISHED", tmp_path / "published")
+    monkeypatch.setattr(config, "LOGS", tmp_path / "logs")
+    seen = []
+
+    def fake_publish(today, args):
+        seen.append(json.loads((tmp_path / "published" / "run_status.json").read_text()))
+        return "published to GitHub"
+
+    monkeypatch.setattr(run_pipeline, "STAGES", {"test": ["a", "publish"]})
+    monkeypatch.setattr(run_pipeline, "STEP_FUNCS", {"a": a_fn, "publish": fake_publish})
+    return seen
+
+
+def test_publish_runs_after_failure_with_final_status(tmp_path, monkeypatch):
+    def boom(t, a):
+        raise RuntimeError("nope")
+    seen = _stage_with_publish(tmp_path, monkeypatch, boom)
+    assert run_pipeline.main(["--stage", "test", "--today", "2026-10-15"]) == 1
+    assert len(seen) == 1 and seen[0]["ok"] is False and seen[0]["finished"]
+
+
+def test_publish_runs_after_status_finish_on_success(tmp_path, monkeypatch):
+    seen = _stage_with_publish(tmp_path, monkeypatch, lambda t, a: "fine")
+    assert run_pipeline.main(["--stage", "test", "--today", "2026-10-15"]) == 0
+    assert len(seen) == 1 and seen[0]["ok"] is True and seen[0]["finished"]
