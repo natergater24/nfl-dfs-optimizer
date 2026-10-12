@@ -109,6 +109,7 @@ def step_build(today, args) -> str:
     atomic_write_parquet(res["lineups"], out / "lineups.parquet")
     atomic_write_parquet(res["swaps"], out / "swaps.parquet")
     atomic_save_npy(res["sims"][: config.N_SIMS_PUBLISHED].astype(np.float16), out / "sims.npy")
+    atomic_save_npy(res["field"].astype(np.int16), out / "field.npy")
     rec = res["lineups"][res["lineups"]["rank"] == 0]
     dk_rules.write_upload_csv([g for _, g in rec.groupby("contest_key", sort=False)],
                               out / "dk_upload_recommended.csv")

@@ -54,6 +54,7 @@ def test_build_slate_end_to_end():
     p = res["pool"]
     assert {"median", "floor", "ceiling", "boom_rate", "own_pct", "tier", "matched"} <= set(p.columns)
     assert res["sims"].shape == (300, len(p))
+    assert res["field"].shape == (150, 9)
     out_wr = p[p["name"] == "AAA WR1"].iloc[0]
     assert out_wr.own_pct == 0 and out_wr["median"] == 0
     lus = res["lineups"]

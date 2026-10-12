@@ -36,8 +36,8 @@ def build_slate(pool_base, player_weeks, team_weeks, team_model, vegas_games, *,
     dvp = (matchups.defense_vs_position(player_weeks, schedule_rows) if schedule_rows is not None
            else pd.DataFrame(columns=["defense", "position", "allowed", "ratio", "rank"]))
     pool = matchups.attach_matchups(pool, dvp)
-    lus, swaps = lineups.build_all(pool, sims, n_candidates=n_candidates, field_size=field_size, seed=seed)
+    lus, swaps, field = lineups.build_all(pool, sims, n_candidates=n_candidates, field_size=field_size, seed=seed)
     offense = pool[(pool.position != "DST") & pool.playable]
-    return {"pool": pool, "sims": sims, "lineups": lus, "swaps": swaps,
+    return {"pool": pool, "sims": sims, "lineups": lus, "swaps": swaps, "field": field,
             "match_rate": float(offense.matched.mean()) if len(offense) else 1.0,
             "unmatched": sorted(offense.loc[~offense.matched, "name"].tolist())}

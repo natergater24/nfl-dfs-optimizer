@@ -24,6 +24,8 @@ FIELD_SIZE = 2_000
 MIN_UNIQUE_PLAYERS = 3             # each candidate differs from earlier ones by >= 3 players
 CANDIDATE_PERTURBATION = 0.35      # how far a random simulated week nudges each candidate solve
 N_SWAPS = 8
+MAX_SWAPS_PER_POSITION = 2         # outlier list is spread across positions
+REBUILD_CANDIDATES = 30            # candidates per "Rebuild with my locks" in the app
 SWAP_MAX_OWN_TOURNAMENT = 10.0     # tournament outliers must be Moderate or Contrarian
 SEED = 20261012
 STATS_SEASONS_BACK = 3             # current season + 3 prior seasons of nflverse data

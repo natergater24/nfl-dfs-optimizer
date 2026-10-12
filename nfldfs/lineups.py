@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 
 from .config import (CANDIDATE_PERTURBATION, CONTEST_TYPES, FIELD_SIZE, MIN_SALARY_DEFAULT,
-                     MIN_UNIQUE_PLAYERS, N_CANDIDATES, N_SWAPS, SALARY_CAP, SEED, SWAP_MAX_OWN_TOURNAMENT)
+                     MIN_UNIQUE_PLAYERS, MAX_SWAPS_PER_POSITION, N_CANDIDATES, N_SWAPS, REBUILD_CANDIDATES,
+                     SALARY_CAP, SEED, SWAP_MAX_OWN_TOURNAMENT)
 from .dk_rules import ROSTER_SLOTS, assign_slots
 from .optimizer import InfeasibleError, solve_lineup
 from .sim_eval import contest_metric, field_ownership, lineup_scores, sample_field, thresholds
@@ -78,7 +79,8 @@ def find_swaps(pool, sims, lineup: list[int], contest: dict, field_scores, n: in
     if not rows:
         return pd.DataFrame(columns=SWAP_COLUMNS)
     df = pd.DataFrame(rows).sort_values("metric_delta", ascending=False, kind="stable")
-    return df.drop_duplicates("in_dk_id").head(n).reset_index(drop=True)[SWAP_COLUMNS]
+    df = df.drop_duplicates("in_dk_id").groupby("position", sort=False).head(MAX_SWAPS_PER_POSITION)
+    return df.head(n).reset_index(drop=True)[SWAP_COLUMNS]
 
 
 def _warn_ownership_conflict(pool: pd.DataFrame, field: np.ndarray) -> None:
@@ -94,7 +96,8 @@ def _warn_ownership_conflict(pool: pd.DataFrame, field: np.ndarray) -> None:
 
 def build_all(pool: pd.DataFrame, sims: np.ndarray, *, contest_types: dict = CONTEST_TYPES,
               n_candidates: int = N_CANDIDATES, field_size: int = FIELD_SIZE, seed: int = SEED,
-              keep_top: int = 3, min_salary: int = MIN_SALARY_DEFAULT) -> tuple[pd.DataFrame, pd.DataFrame]:
+              keep_top: int = 3, min_salary: int = MIN_SALARY_DEFAULT
+              ) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
     rng = np.random.default_rng(seed)
     field = sample_field(pool, field_size, rng)
     field_scores = lineup_scores(sims, field)
@@ -126,4 +129,16 @@ def build_all(pool: pd.DataFrame, sims: np.ndarray, *, contest_types: dict = CON
         sw.insert(0, "contest_key", key)
         swap_frames.append(sw)
     return (pd.DataFrame(lineup_rows, columns=LINEUP_COLUMNS),
-            pd.concat(swap_frames, ignore_index=True))
+            pd.concat(swap_frames, ignore_index=True), field)
+
+
+def best_lineup(pool: pd.DataFrame, sims: np.ndarray, field: np.ndarray, contest: dict, *, locks=(),
+                excludes=(), n_candidates: int = REBUILD_CANDIDATES, seed: int = SEED,
+                min_salary: int = MIN_SALARY_DEFAULT) -> tuple[list[int], float]:
+    """Best lineup for one contest type under the user's locks/excludes (used by the app)."""
+    rng = np.random.default_rng(seed)
+    cands = generate_candidates(pool, sims, contest, n_candidates, rng, min_salary=min_salary,
+                                locks=locks, excludes=excludes)
+    metric = contest_metric(lineup_scores(sims, cands), lineup_scores(sims, field), contest["metric"])
+    i = int(np.argmax(metric))
+    return cands[i], float(metric[i])

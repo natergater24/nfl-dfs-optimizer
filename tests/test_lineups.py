@@ -31,7 +31,7 @@ def test_candidates_are_distinct_and_valid(projected):
 
 def test_build_all_covers_every_contest_type(projected):
     p, sims = projected
-    lus, swaps = lineups.build_all(p, sims, n_candidates=3, field_size=150, seed=1)
+    lus, swaps, field = lineups.build_all(p, sims, n_candidates=3, field_size=150, seed=1)
     assert list(lus.columns) == lineups.LINEUP_COLUMNS
     assert set(lus.contest_key) == set(config.CONTEST_TYPES)
     for key, g in lus[lus["rank"] == 0].groupby("contest_key"):
@@ -46,7 +46,7 @@ def test_build_all_covers_every_contest_type(projected):
 
 def test_swaps_respect_cap_position_and_ownership(projected):
     p, sims = projected
-    lus, swaps = lineups.build_all(p, sims, n_candidates=3, field_size=150, seed=1)
+    lus, swaps, field = lineups.build_all(p, sims, n_candidates=3, field_size=150, seed=1)
     assert (swaps.remaining_salary >= 0).all()
     pos = dict(zip(p.dk_id, p.position))
     assert all(pos[a] == pos[b] for a, b in zip(swaps.out_dk_id, swaps.in_dk_id))
@@ -56,3 +56,28 @@ def test_swaps_respect_cap_position_and_ownership(projected):
         assert len(g) <= config.N_SWAPS
         if config.CONTEST_TYPES[key]["group"] == "Tournament":
             assert (g.in_own_pct < config.SWAP_MAX_OWN_TOURNAMENT).all()
+
+
+def test_build_all_returns_field(projected):
+    p, sims = projected
+    _, _, field = lineups.build_all(p, sims, n_candidates=3, field_size=150, seed=1)
+    assert field.shape == (150, 9)
+
+
+def test_swaps_spread_across_positions(projected):
+    p, sims = projected
+    _, swaps, _ = lineups.build_all(p, sims, n_candidates=3, field_size=150, seed=1)
+    assert swaps.groupby(["contest_key", "position"]).size().max() <= config.MAX_SWAPS_PER_POSITION
+
+
+def test_best_lineup_respects_locks_and_excludes(projected):
+    from nfldfs.sim_eval import sample_field
+    p, sims = projected
+    field = sample_field(p, 100, np.random.default_rng(0))
+    lock = int(p.loc[p["name"] == "CCC TE3", "dk_id"].iloc[0])
+    excl = int(p.loc[p["name"] == "AAA WR1", "dk_id"].iloc[0])
+    rows, metric = lineups.best_lineup(p, sims, field, config.CONTEST_TYPES["tournament"],
+                                       locks=[lock], excludes=[excl], n_candidates=4)
+    lu = p.loc[rows]
+    assert dk_rules.validate_lineup(lu) == [] and 0.0 <= metric <= 1.0
+    assert lock in lu.dk_id.tolist() and excl not in lu.dk_id.tolist()
