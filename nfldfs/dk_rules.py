@@ -87,11 +87,15 @@ def assign_slots(players: pd.DataFrame) -> list[int]:
     return slots
 
 
-def write_upload_csv(lineups: list[pd.DataFrame], path) -> None:
+def upload_csv_text(lineups: list[pd.DataFrame]) -> str:
     """DraftKings bulk-upload format: slot header row, then one row of player IDs per lineup."""
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(ROSTER_SLOTS)
     for lu in lineups:
         w.writerow(assign_slots(lu))
-    atomic_write_text(path, buf.getvalue())
+    return buf.getvalue()
+
+
+def write_upload_csv(lineups: list[pd.DataFrame], path) -> None:
+    atomic_write_text(path, upload_csv_text(lineups))

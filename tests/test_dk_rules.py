@@ -78,3 +78,10 @@ def test_write_upload_csv_refuses_invalid_lineup(pool, tmp_path):
     bad = _lineup(pool, _valid_ids(pool)).iloc[:8]
     with pytest.raises(ValueError):
         dk_rules.write_upload_csv([bad], tmp_path / "upload.csv")
+
+
+def test_upload_csv_text_matches_file(pool, tmp_path):
+    good = _lineup(pool, _valid_ids(pool))
+    text = dk_rules.upload_csv_text([good])
+    dk_rules.write_upload_csv([good], tmp_path / "u.csv")
+    assert text == (tmp_path / "u.csv").read_text() and text.startswith("QB,RB,RB,WR,WR,WR,TE,FLEX,DST\n")

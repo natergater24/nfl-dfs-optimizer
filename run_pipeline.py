@@ -141,7 +141,8 @@ def step_build(today, args) -> str:
     slate_date = str(pd.read_parquet(P / "pool_base.parquet", columns=["kickoff"]).kickoff.min().date())
     atomic_write_parquet(res["pool"], config.SLATES / f"{slate_date}_{slate.get('draft_group_id') or 'upload'}.parquet")
     odds = json.loads((P / "odds_meta.json").read_text()) if (P / "odds_meta.json").exists() else {}
-    meta = {**slate, "built_at": _now(), "n_sims": config.N_SIMS, "match_rate": res["match_rate"],
+    meta = {**slate, "built_at": _now(),
+            "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "n_sims": config.N_SIMS, "match_rate": res["match_rate"],
             "unmatched": res["unmatched"], "vegas_fetched_at": odds.get("fetched_at"),
             "odds_requests_remaining": odds.get("requests_remaining"),
             "slate_date": slate_date, "ownership_model_weeks": (model or {}).get("weeks")}

@@ -4,32 +4,8 @@ import pytest
 
 from nfldfs import build, config, dk_rules
 from nfldfs.nfl_stats import team_week_totals
-from tests.conftest import make_pool
 
-MODEL = {"n_games": 999, "coef": {
-    "pass_att": [20, 0.5, 0], "pass_yds": [100, 5, 0], "pass_td": [0, 0.07, 0], "ints": [0.8, 0, 0],
-    "carries": [15, 0.4, 0.3], "rush_yds": [60, 2.5, 1], "rush_td": [0, 0.04, 0]}}
-
-
-def _inputs():
-    full = make_pool()
-    pool_base = full[["dk_id", "name", "position", "salary", "team", "opp", "game_id", "is_home",
-                      "kickoff", "dk_avg", "status", "playable"]].copy()
-    rows = []
-    for r in full[full.position != "DST"].itertuples(index=False):
-        for wk in range(1, 7):
-            t, c = round(r.tgt_share * 36), round(r.carry_share * 26)
-            qb1 = r.name.endswith("QB1")
-            rows.append(dict(player_id=f"P{r.dk_id}", name=r.name, position=r.position, team=r.team,
-                             season=2026, week=wk, pass_att=34 if qb1 else 0, pass_yds=240.0 if qb1 else 0.0,
-                             pass_td=2 if qb1 else 0, ints=1 if qb1 else 0, carries=c, rush_yds=c * r.ypc,
-                             rush_td=0, targets=t, receptions=round(t * r.catch_rate), rec_yds=t * r.ypt,
-                             rec_td=0, fumbles_lost=0, two_pt=0, dk_pts=0.0))
-    pw = pd.DataFrame(rows)
-    games = pd.DataFrame({"game_id": ["AAA@BBB", "CCC@DDD", "XXX@YYY"], "home": ["BBB", "DDD", "YYY"],
-                          "away": ["AAA", "CCC", "XXX"], "total": [45.0, 47.0, 40.0],
-                          "home_spread": [-3.0, 2.0, 0.0], "n_books": 3, "commence_time": "2026-10-18T17:00:00Z"})
-    return pool_base, pw, team_week_totals(pw), games
+from tests.conftest import SYNTH_MODEL as MODEL, synthetic_inputs as _inputs
 
 
 def test_missing_vegas_lines_names_teams():
