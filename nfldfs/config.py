@@ -13,6 +13,11 @@ RAW = DATA / "raw"
 PROCESSED = DATA / "processed"
 PUBLISHED = DATA / "published"
 LOGS = ROOT / "logs"
+HISTORY = DATA / "history"
+SLATES = PROCESSED / "slates"
+DOWNLOADS = Path(os.environ.get("NFLDFS_DOWNLOADS", str(Path.home() / "Downloads")))
+VEGAS_REUSE_HOURS = 4              # Sunday 11:45 reuses the 9:00 lines
+VEGAS_FALLBACK_HOURS = 48          # if the odds fetch fails, reuse lines up to this old (loud warning)
 
 SALARY_CAP = 50_000
 MIN_SALARY_DEFAULT = 49_000

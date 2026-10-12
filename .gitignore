@@ -5,7 +5,9 @@ env.txt
 .env
 
 # Built data and logs (Plan 2 un-ignores the published files the hosted app needs)
-data/
+data/*
+!data/published/
+!data/history/
 logs/
 
 # Python / OS

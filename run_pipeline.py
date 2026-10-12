@@ -4,8 +4,13 @@
   ./py run_pipeline.py --stage tuesday     salaries + nflverse stats
   ./py run_pipeline.py --stage thursday    (salaries/stats if missing) + Vegas + build
   ./py run_pipeline.py --stage sunday      fresh salaries/statuses + Vegas + build
+  ./py run_pipeline.py --stage sunday_late fresh salaries + (stale) Vegas + build + publish
+  ./py run_pipeline.py --stage refresh     salaries + (missing) stats + (stale) Vegas + build + publish
+  ./py run_pipeline.py --stage results     import a DraftKings standings file, report card, publish
   ./py run_pipeline.py --stage build       rebuild from what's already downloaded
+  (thursday and sunday also publish when they finish)
   add --salary-csv PATH to use a manually downloaded DKSalaries.csv
+  add --results-file PATH to import one specific standings file
 """
 from __future__ import annotations
 
@@ -13,14 +18,15 @@ import argparse
 import datetime as dt
 import json
 import logging
+import shutil
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
-from nfldfs import build, config, dk_rules, dk_salaries, nfl_stats, team_env, vegas
-from nfldfs.status import RunStatus, atomic_save_npy, atomic_write_parquet, atomic_write_text
+from nfldfs import build, config, dk_salaries, nfl_stats, ownership, publish, results, team_env, vegas
+from nfldfs.build import write_published
+from nfldfs.status import RunStatus, atomic_write_parquet, atomic_write_text
 
 log = logging.getLogger("pipeline")
 
@@ -86,8 +92,25 @@ def step_stats_if_missing(today, args) -> str:
     return step_stats(today, args)
 
 
+def _odds_age_hours() -> float | None:
+    p = config.PROCESSED / "odds_meta.json"
+    if not p.exists():
+        return None
+    fetched = json.loads(p.read_text()).get("fetched_at")
+    if not fetched:
+        return None
+    return (dt.datetime.now() - dt.datetime.fromisoformat(fetched)).total_seconds() / 3600
+
+
 def step_vegas(today, args) -> str:
-    events, remaining = vegas.fetch_odds(config.odds_api_key())
+    try:
+        events, remaining = vegas.fetch_odds(config.odds_api_key())
+    except RuntimeError as e:
+        age = _odds_age_hours()
+        if age is not None and age <= config.VEGAS_FALLBACK_HOURS and \
+                (config.PROCESSED / "vegas_games.parquet").exists():
+            return f"WARNING: {e} Reusing lines fetched {age:.0f}h ago."
+        raise
     games = vegas.parse_odds(events)
     atomic_write_parquet(games, config.PROCESSED / "vegas_games.parquet")
     atomic_write_text(config.PROCESSED / "odds_meta.json",
@@ -95,44 +118,85 @@ def step_vegas(today, args) -> str:
     return f"{len(games)} games with lines; Odds API requests remaining: {remaining}"
 
 
+def step_vegas_if_stale(today, args) -> str:
+    age = _odds_age_hours()
+    if age is not None and age < config.VEGAS_REUSE_HOURS and (config.PROCESSED / "vegas_games.parquet").exists():
+        return f"skipped: lines fetched {age * 60:.0f} min ago"
+    return step_vegas(today, args)
+
+
 def step_build(today, args) -> str:
     P = config.PROCESSED
     sched_path = P / "schedule_rows.parquet"
+    model_path = P / "ownership_model.json"
+    model = json.loads(model_path.read_text()) if model_path.exists() else None
     res = build.build_slate(
         pd.read_parquet(P / "pool_base.parquet"), pd.read_parquet(P / "player_weeks.parquet"),
         pd.read_parquet(P / "team_weeks.parquet"), json.loads((P / "team_model.json").read_text()),
         pd.read_parquet(P / "vegas_games.parquet"), n_sims=config.N_SIMS, seed=config.SEED,
         n_candidates=config.N_CANDIDATES, field_size=config.FIELD_SIZE,
-        schedule_rows=pd.read_parquet(sched_path) if sched_path.exists() else None)
-    out = config.PUBLISHED
-    atomic_write_parquet(res["pool"], out / "player_pool.parquet")
-    atomic_write_parquet(res["lineups"], out / "lineups.parquet")
-    atomic_write_parquet(res["swaps"], out / "swaps.parquet")
-    atomic_save_npy(res["sims"][: config.N_SIMS_PUBLISHED].astype(np.float16), out / "sims.npy")
-    atomic_save_npy(res["field"].astype(np.int16), out / "field.npy")
-    rec = res["lineups"][res["lineups"]["rank"] == 0]
-    dk_rules.write_upload_csv([g for _, g in rec.groupby("contest_key", sort=False)],
-                              out / "dk_upload_recommended.csv")
+        schedule_rows=pd.read_parquet(sched_path) if sched_path.exists() else None,
+        ownership_model=model)
     slate = json.loads((P / "slate.json").read_text())
+    slate_date = str(pd.read_parquet(P / "pool_base.parquet", columns=["kickoff"]).kickoff.min().date())
+    atomic_write_parquet(res["pool"], config.SLATES / f"{slate_date}_{slate.get('draft_group_id') or 'upload'}.parquet")
     odds = json.loads((P / "odds_meta.json").read_text()) if (P / "odds_meta.json").exists() else {}
     meta = {**slate, "built_at": _now(), "n_sims": config.N_SIMS, "match_rate": res["match_rate"],
             "unmatched": res["unmatched"], "vegas_fetched_at": odds.get("fetched_at"),
-            "odds_requests_remaining": odds.get("requests_remaining")}
-    atomic_write_text(out / "build_meta.json", json.dumps(meta, indent=2, default=str))
+            "odds_requests_remaining": odds.get("requests_remaining"),
+            "slate_date": slate_date, "ownership_model_weeks": (model or {}).get("weeks")}
+    write_published(res, config.PUBLISHED, meta)
+    rec = res["lineups"][res["lineups"]["rank"] == 0]
     return (f"{rec.contest_key.nunique()} contest types built; name match rate {res['match_rate']:.0%}"
             + (f"; unmatched: {', '.join(res['unmatched'][:10])}" if res["unmatched"] else ""))
 
 
+def step_results(today, args) -> str:
+    done = config.RAW / "standings"
+    files = ([Path(args.results_file)] if getattr(args, "results_file", None)
+             else results.find_new_standings(config.DOWNLOADS, done))
+    if not files:
+        return "skipped: no new contest-standings file"
+    done.mkdir(parents=True, exist_ok=True)
+    hist, slates = None, []
+    for f in files:
+        downloaded = dt.date.fromtimestamp(f.stat().st_mtime)
+        snap = results.latest_slate_snapshot(config.SLATES, min(today, downloaded))
+        if snap is None:
+            raise RuntimeError(f"No built slate on or before {min(today, downloaded)} to match {f.name} to — "
+                               "results can only be imported for slates this app built.")
+        slate_date, dg = results.snapshot_key(snap)
+        rows = results.match_to_slate(results.read_standings(f), pd.read_parquet(snap), slate_date, dg)
+        hist = results.append_history(config.HISTORY / "results.parquet", rows)
+        shutil.move(str(f), str(done / f.name))
+        slates.append(slate_date)
+    card = results.report_card(hist)
+    atomic_write_text(config.PUBLISHED / "report_card.json", json.dumps(card, indent=2))
+    model = ownership.fit_ownership_model(hist)
+    if model:
+        atomic_write_text(config.PROCESSED / "ownership_model.json", json.dumps(model, indent=2))
+    return (f"imported {len(files)} file(s) for the {', '.join(sorted(set(slates)))} slate; "
+            f"{card['weeks']} week(s) of results" + ("; ownership model updated" if model else ""))
+
+
+def step_publish(today, args) -> str:
+    return publish.publish(config.ROOT, ["data/published", "data/history"], f"Slate update: {args.stage} {today}")
+
+
 STAGES = {
     "tuesday": ["salaries", "stats"],
-    "thursday": ["salaries_if_stale", "stats_if_missing", "vegas", "build"],
-    "sunday": ["salaries", "stats_if_missing", "vegas", "build"],
+    "thursday": ["salaries_if_stale", "stats_if_missing", "vegas", "build", "publish"],
+    "sunday": ["salaries", "stats_if_missing", "vegas", "build", "publish"],
+    "sunday_late": ["salaries", "vegas_if_stale", "build", "publish"],
+    "refresh": ["salaries", "stats_if_missing", "vegas_if_stale", "build", "publish"],
+    "results": ["results", "publish"],
     "build": ["build"],
 }
 STEP_FUNCS = {
     "salaries": step_salaries, "salaries_if_stale": step_salaries_if_stale,
     "stats": step_stats, "stats_if_missing": step_stats_if_missing,
-    "vegas": step_vegas, "build": step_build,
+    "vegas": step_vegas, "vegas_if_stale": step_vegas_if_stale, "build": step_build,
+    "results": step_results, "publish": step_publish,
 }
 
 
@@ -140,6 +204,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", required=True)
     ap.add_argument("--salary-csv", help="use a manually downloaded DKSalaries.csv")
+    ap.add_argument("--results-file", help="import one DraftKings contest-standings file")
     ap.add_argument("--today", help="override today's date (YYYY-MM-DD), for testing")
     args = ap.parse_args(argv)
     if args.stage not in STAGES:
@@ -149,7 +214,8 @@ def main(argv=None) -> int:
                         handlers=[logging.StreamHandler(sys.stdout),
                                   logging.FileHandler(config.LOGS / "pipeline.log")])
     today = dt.date.fromisoformat(args.today) if args.today else dt.date.today()
-    status = RunStatus(config.PUBLISHED / "run_status.json", args.stage)
+    status_file = "results_status.json" if args.stage == "results" else "run_status.json"
+    status = RunStatus(config.PUBLISHED / status_file, args.stage)
     ok = True
     for name in STAGES[args.stage]:
         log.info("── %s ──", name)

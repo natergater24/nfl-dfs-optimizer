@@ -1,10 +1,16 @@
 """Turn loaded inputs into a full slate build: projections, ownership, lineups, swaps."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
 
 from . import lineups, matchups, ownership, shares, simulate, team_env
-from .config import FIELD_SIZE, N_CANDIDATES, N_SIMS, SEED
+from .config import FIELD_SIZE, N_CANDIDATES, N_SIMS, N_SIMS_PUBLISHED, SEED
+from .dk_rules import write_upload_csv
+from .status import atomic_save_npy, atomic_write_parquet, atomic_write_text
 from .vegas import implied_totals
 
 
@@ -42,3 +48,16 @@ def build_slate(pool_base, player_weeks, team_weeks, team_model, vegas_games, *,
     return {"pool": pool, "sims": sims, "lineups": lus, "swaps": swaps, "field": field,
             "match_rate": float(offense.matched.mean()) if len(offense) else 1.0,
             "unmatched": sorted(offense.loc[~offense.matched, "name"].tolist())}
+
+
+def write_published(res: dict, out_dir, meta: dict) -> None:
+    """Everything the app reads. Each file is written atomically; build_meta.json goes last."""
+    out = Path(out_dir)
+    atomic_write_parquet(res["pool"], out / "player_pool.parquet")
+    atomic_write_parquet(res["lineups"], out / "lineups.parquet")
+    atomic_write_parquet(res["swaps"], out / "swaps.parquet")
+    atomic_save_npy(res["sims"][:N_SIMS_PUBLISHED].astype(np.float16), out / "sims.npy")
+    atomic_save_npy(np.asarray(res["field"]).astype(np.int16), out / "field.npy")
+    rec = res["lineups"][res["lineups"]["rank"] == 0]
+    write_upload_csv([g for _, g in rec.groupby("contest_key", sort=False)], out / "dk_upload_recommended.csv")
+    atomic_write_text(out / "build_meta.json", json.dumps(meta, indent=2, default=str))

@@ -108,7 +108,8 @@ def _card(df: pd.DataFrame) -> dict:
     own = df.dropna(subset=["actual_own"])
     if len(own):
         out["own_mae"] = round(float((own["actual_own"] - own["own_pct"]).abs().mean()), 2)
-        corr = float(own["actual_own"].corr(own["own_pct"])) if len(own) > 2 else float("nan")
+        varies = len(own) > 2 and own["actual_own"].nunique() > 1 and own["own_pct"].nunique() > 1
+        corr = float(own["actual_own"].corr(own["own_pct"])) if varies else float("nan")
         out["own_corr"] = None if np.isnan(corr) else round(corr, 3)
     return out
 

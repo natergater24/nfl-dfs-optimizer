@@ -1,7 +1,15 @@
+import datetime as dt
 import json
+import os
+import zipfile
+from types import SimpleNamespace
+
+import pandas as pd
+import pytest
 
 import run_pipeline
 from nfldfs import config
+from tests.conftest import make_pool
 
 
 def test_every_stage_step_exists():
@@ -67,3 +75,90 @@ def test_stats_if_missing_reruns_when_files_missing(tmp_path, monkeypatch):
     (tmp_path / "team_model.json").unlink()
     run_pipeline.step_stats_if_missing(dt.date(2026, 10, 15), None)
     assert ran == [1]
+
+
+def _paths(tmp_path, monkeypatch):
+    for name in ("PUBLISHED", "PROCESSED", "RAW", "HISTORY", "LOGS"):
+        monkeypatch.setattr(config, name, tmp_path / name.lower())
+    monkeypatch.setattr(config, "SLATES", tmp_path / "processed" / "slates")
+    monkeypatch.setattr(config, "DOWNLOADS", tmp_path / "Downloads")
+    (tmp_path / "Downloads").mkdir()
+    (tmp_path / "processed").mkdir()
+
+
+def _odds(tmp_path, hours_ago):
+    fetched = (dt.datetime.now() - dt.timedelta(hours=hours_ago)).isoformat(timespec="seconds")
+    (tmp_path / "processed" / "odds_meta.json").write_text(json.dumps({"fetched_at": fetched}))
+    (tmp_path / "processed" / "vegas_games.parquet").write_bytes(b"x")
+
+
+def test_vegas_if_stale_skips_recent_lines(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _odds(tmp_path, 1)
+    monkeypatch.setattr(run_pipeline, "step_vegas", lambda t, a: pytest.fail("should not refetch"))
+    assert run_pipeline.step_vegas_if_stale(dt.date(2026, 10, 18), SimpleNamespace()).startswith("skipped")
+
+
+def test_vegas_if_stale_refetches_old_lines(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _odds(tmp_path, 5)
+    monkeypatch.setattr(run_pipeline, "step_vegas", lambda t, a: "fetched")
+    assert run_pipeline.step_vegas_if_stale(dt.date(2026, 10, 18), SimpleNamespace()) == "fetched"
+
+
+def test_vegas_falls_back_to_recent_lines(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _odds(tmp_path, 10)
+    monkeypatch.setattr(config, "odds_api_key", lambda: "k")
+    def boom(key):
+        raise RuntimeError("The Odds API request failed (HTTP 429)")
+    monkeypatch.setattr(run_pipeline.vegas, "fetch_odds", boom)
+    msg = run_pipeline.step_vegas(dt.date(2026, 10, 18), SimpleNamespace())
+    assert msg.startswith("WARNING") and "Reusing lines" in msg
+    _odds(tmp_path, 60)
+    with pytest.raises(RuntimeError):
+        run_pipeline.step_vegas(dt.date(2026, 10, 18), SimpleNamespace())
+
+
+def test_results_stage_writes_its_own_status(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "publish", lambda t, a: "skipped: test")
+    assert run_pipeline.main(["--stage", "results", "--today", "2026-10-19"]) == 0
+    status = json.loads((tmp_path / "published" / "results_status.json").read_text())
+    assert status["steps"][0]["message"] == "skipped: no new contest-standings file"
+    assert not (tmp_path / "published" / "run_status.json").exists()
+
+
+def _snapshot_file(tmp_path, date="2026-10-18"):
+    p = make_pool()
+    p["median"], p["floor"], p["ceiling"], p["own_pct"] = 10.0, 5.0, 20.0, 8.0
+    (tmp_path / "processed" / "slates").mkdir(parents=True, exist_ok=True)
+    p.to_parquet(tmp_path / "processed" / "slates" / f"{date}_154941.parquet", index=False)
+
+
+def _standings_zip(path):
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("contest-standings-1.csv",
+                   "Rank,EntryId,EntryName,TimeRemaining,Points,Lineup,,Player,Roster Position,%Drafted,FPTS\n"
+                   "1,1,someone,0,100,x,,AAA QB1,QB,30.00%,22.0\n")
+    return path
+
+
+def test_step_results_imports_moves_and_reports(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _snapshot_file(tmp_path)
+    z = _standings_zip(tmp_path / "Downloads" / "contest-standings-1.zip")
+    monday = dt.datetime(2026, 10, 19, 9, 0).timestamp()
+    os.utime(z, (monday, monday))                                 # file date drives slate matching
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "2026-10-18" in msg
+    assert not z.exists() and (tmp_path / "raw" / "standings" / z.name).exists()
+    hist = pd.read_parquet(tmp_path / "history" / "results.parquet")
+    assert "EntryName" not in hist.columns and "someone" not in hist.to_csv()
+    assert json.loads((tmp_path / "published" / "report_card.json").read_text())["weeks"] == 1
+
+
+def test_step_results_matches_by_download_date(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    _snapshot_file(tmp_path, "2026-10-18"); _snapshot_file(tmp_path, "2026-10-25")
+    z = _standings_zip(tmp_path / "Downloads" / "contest-standings-1.zip")
+    monday = dt.datetime(2026, 10, 19, 9, 0).timestamp()
+    os.utime(z, (monday, monday))                                 # downloaded the Monday after 10/18
+    msg = run_pipeline.step_results(dt.date(2026, 10, 27), SimpleNamespace(results_file=None))
+    assert "2026-10-18" in msg                                    # not the 10/25 slate
