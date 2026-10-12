@@ -19,3 +19,16 @@ Build (Plan 1, branch engine)
   Odds API key from errors/logs, made thursday/sunday rebuild stale stats, and gave plain guidance for a blocked
   DK lobby. Top medians now QB 22.8 / RB 19.4 / WR 14.9 / TE 13.6 / DST 8.0; 2 players pinned at the 60% ownership cap.
 - Next: Plan 2 (app, publishing, scheduling, results import). No tuning decisions are pending.
+
+SESSION LOG - 2026-10-12 (Plan 2)
+
+Prototype decisions
+- Two-panel lineup builder (slots left, eligible players right) with click-click and drag/drop swaps.
+- Matchup colors (green soft, red tough), an in-app Key (Chalk / Contrarian), full dollar prices ($7,500).
+
+Build (Plan 2, branch app)
+- Built the Streamlit app, publish-to-GitHub flow, weekly LaunchAgent schedule with results watcher, results
+  import and ownership learning. 189 tests passing.
+- Docs batch: USER_MANUAL.md, README and context updates, devcontainer for Codespaces.
+- Pending Nathan: schedule install/pmset/Downloads check, GitHub repo + push + Streamlit Cloud, import-guide
+  wording from screenshots.

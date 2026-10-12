@@ -92,3 +92,27 @@ OUTSTANDING
 - Option C: Sleeper blend.
 - Reset the first 8 commits' author email before the first GitHub push.
 - Tuning: none pending; revisit with the weekly report card against real results.
+
+=== 2026-10-12: Plan 2 (app, publishing, schedule, results import) ===
+Branch `app`. 189 tests pass.
+- App modules: app.py + nfldfs_app/ (Streamlit): header and hosted banner, Key, Recommended lineup, outliers,
+  My Lineup builder (click / click / drag swaps), Player pool tab (locks, excludes, rebuild), report card,
+  sidebar (status, results import guide, local actions). Local: `bash launch.sh` -> http://localhost:8502.
+- Stages: tuesday, thursday, sunday, sunday_late, refresh, results, build.
+- Publish flow: runs after the run status is finalized, also after failures, so the hosted banner sees failures.
+  It commits only data/published + data/history, never raises, and redacts credentials.
+- Results import: matches the slate by the zip's download date. Standings files (with usernames) stay in
+  git-ignored data/raw/standings; only per-player aggregates are published.
+- Ownership model learns from results after 3 imported weeks.
+- Builder keeps working when a lineup player is ruled out (OUT tag, export blocked).
+- Schedule: weekly LaunchAgents. The sunday agent uses AbandonProcessGroup so the keep-awake survives to 11:45.
+  LaunchAgents only run while Nathan is logged in on the Mac.
+- Hosted URL: (set after Streamlit Cloud deploy)
+
+OUTSTANDING (pending Nathan)
+- Schedule install + pmset + Downloads-access check (Task 11 Step 6).
+- GitHub repo + first push + Streamlit Cloud deploy (Task 12); first 8 commits' author email reset before push.
+- Finalize the DraftKings import-guide wording from Nathan's screenshots (Task 13 Step 1).
+OUTSTANDING (modeling)
+- Red-zone shares; option C (Sleeper blend); matchup as a projection input (decide from the report card);
+  historical backtest (spec section 12); review the report card after 3-4 weeks.

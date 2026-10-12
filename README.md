@@ -10,10 +10,12 @@ and Vegas lines (The Odds API). Personal use; never logs in to DraftKings or ent
 2. Copy `env.txt.example` to `env.txt` and add `ODDS_API_KEY`
 3. `./py -m pytest -q`
 
-## Weekly use (manual until Plan 2 adds scheduling and the app)
-- Tuesday: `./py run_pipeline.py --stage tuesday`
-- Thursday: `./py run_pipeline.py --stage thursday`
-- Sunday morning: `./py run_pipeline.py --stage sunday`
+## Weekly use
+Everything runs on a schedule; see `USER_MANUAL.md` for the plain-language weekly guide.
+- Hosted copy (phone): (set after Streamlit Cloud deploy)
+- Local app: `bash launch.sh` then open http://localhost:8502 (or the Desktop launcher once created)
+- Stages, each runnable with `./py run_pipeline.py --stage <name>`: `tuesday`, `thursday`, `sunday`,
+  `sunday_late`, `refresh`, `results`, `build`
 - If DraftKings blocks the automatic download: add `--salary-csv ~/Downloads/DKSalaries.csv`
 
 Outputs land in `data/published/` (lineups, swaps, player pool, upload CSV, run status).
