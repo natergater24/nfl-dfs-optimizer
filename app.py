@@ -35,8 +35,8 @@ if hosted:
             "importing results happen on your Mac and publish here automatically.")
 failed = [s for s in d.run_status.get("steps", []) if s.get("ok") is False]
 if failed:
-    st.error(f"⚠ The last {d.run_status.get('stage', '')} run failed at **{failed[0]['name']}**: "
-             f"{failed[0]['message']}")
+    st.error(f"⚠ The last {d.run_status.get('stage', '')} run failed at **{failed[0].get('name', 'a step')}**: "
+             f"{failed[0].get('message', '')}")
 
 labels = {c["label"]: k for k, c in CONTEST_TYPES.items()}
 top = st.columns([3, 3, 1, 1], vertical_alignment="bottom")

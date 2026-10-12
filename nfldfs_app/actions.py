@@ -11,8 +11,13 @@ STAGE_TIMEOUT = 900
 
 
 def run_stage(stage: str, *extra: str, run=subprocess.run) -> tuple[bool, str]:
-    r = run([sys.executable, str(ROOT / "run_pipeline.py"), "--stage", stage, *extra], cwd=str(ROOT),
-            capture_output=True, text=True, timeout=STAGE_TIMEOUT)
+    try:
+        r = run([sys.executable, str(ROOT / "run_pipeline.py"), "--stage", stage, *extra], cwd=str(ROOT),
+                capture_output=True, text=True, timeout=STAGE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return False, "The pipeline run took longer than 15 minutes and was stopped. Check logs/pipeline.log."
+    except Exception as e:
+        return False, f"Couldn't start the pipeline run ({type(e).__name__}). Check logs/pipeline.log."
     lines = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
     return r.returncode == 0, "\n".join(lines[-15:])
 

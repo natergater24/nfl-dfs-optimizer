@@ -25,3 +25,10 @@ def test_failed_run_shows_banner(make_app, published_dir, tmp_path):
         {"name": "vegas", "ok": False, "message": "RuntimeError: The Odds API request failed (HTTP 429)"}]}))
     at = make_app(pub)
     assert any("failed at **vegas**" in e.value for e in at.error)
+
+
+def test_local_mode_has_refresh_and_no_hosted_banner(make_app, published_dir):
+    at = make_app(published_dir, hosted="0")
+    assert not at.exception
+    assert any(b.key == "refresh" for b in at.button)
+    assert not any("hosted copy" in i.value for i in at.info)
