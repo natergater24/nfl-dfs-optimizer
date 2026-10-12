@@ -25,13 +25,14 @@ def assemble_team_expectations(pool_base: pd.DataFrame, vegas_games: pd.DataFram
 
 
 def build_slate(pool_base, player_weeks, team_weeks, team_model, vegas_games, *, n_sims: int = N_SIMS,
-                seed: int = SEED, n_candidates: int = N_CANDIDATES, field_size: int = FIELD_SIZE, schedule_rows=None) -> dict:
+                seed: int = SEED, n_candidates: int = N_CANDIDATES, field_size: int = FIELD_SIZE, schedule_rows=None,
+                ownership_model=None) -> dict:
     pool, team_exp = assemble_team_expectations(pool_base, vegas_games, team_model)
     pool = shares.attach_shares(pool, shares.compute_shares(player_weeks, team_weeks))
     pool = shares.redistribute(pool).reset_index(drop=True)
     sims = simulate.simulate(pool, team_exp, n_sims, seed)
     pool = pool.join(simulate.summarize(sims, pool))
-    pool["own_pct"] = ownership.estimate_ownership(pool)
+    pool["own_pct"] = ownership.estimate_ownership(pool, ownership_model)
     pool["tier"] = pool.own_pct.map(ownership.ownership_tier)
     dvp = (matchups.defense_vs_position(player_weeks, schedule_rows) if schedule_rows is not None
            else pd.DataFrame(columns=["defense", "position", "allowed", "ratio", "rank"]))
