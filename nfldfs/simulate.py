@@ -54,9 +54,11 @@ def _draw_shares(rng, shares: np.ndarray, n: int):
 
 
 def _allocate_tds(rng, team_tds, draw, rest, weights):
+    """Give each team TD to exactly one player (or the outside-the-pool bucket): one multinomial per sim."""
     w = draw * weights
-    p = w / (w.sum(axis=1, keepdims=True) + rest[:, None])
-    return rng.binomial(team_tds[:, None], np.clip(p, 0.0, 1.0))
+    p = np.concatenate([w, rest[:, None]], axis=1)
+    p = p / p.sum(axis=1, keepdims=True)
+    return rng.multinomial(team_tds, p)[:, :-1]
 
 
 def starting_qbs(pool: pd.DataFrame) -> dict:

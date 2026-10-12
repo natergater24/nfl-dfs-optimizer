@@ -50,3 +50,29 @@ def test_summarize_orders_percentiles(pool, team_exp):
     assert list(s.columns) == ["mean", "floor", "median", "ceiling", "boom_rate"]
     assert (s.floor <= s["median"]).all() and (s["median"] <= s.ceiling).all()
     assert s.boom_rate.between(0, 1).all()
+
+
+def test_allocated_tds_never_exceed_team_tds_and_track_weights():
+    rng = np.random.default_rng(7)
+    n = 20000
+    team_tds = rng.poisson(2.0, n)
+    draw = np.tile([0.4, 0.3, 0.2], (n, 1))
+    rest = np.full(n, 0.1)
+    weights = np.array([1.0, 1.0, 2.0])
+    out = simulate._allocate_tds(rng, team_tds, draw, rest, weights)
+    assert out.shape == (n, 3)
+    assert (out.sum(axis=1) <= team_tds).all()
+    w = draw[0] * weights
+    expected = team_tds.mean() * w / (w.sum() + 0.1)
+    assert np.allclose(out.mean(axis=0), expected, rtol=0.05)
+
+
+def test_game_and_dst_correlations(pool, team_exp):
+    sims = simulate.simulate(pool, team_exp, 4000, seed=2)
+    a_qb, b_qb = _col(pool, "AAA", "QB1"), _col(pool, "BBB", "QB1")
+    a_dst = _col(pool, "AAA", "DST1")
+    c_qb = np.corrcoef(sims[:, a_qb], sims[:, b_qb])[0, 1]
+    c_dst = np.corrcoef(sims[:, a_dst], sims[:, b_qb])[0, 1]
+    print("qb-qb", c_qb, "dst-oppqb", c_dst)
+    assert c_qb > 0.05
+    assert c_dst < -0.1
