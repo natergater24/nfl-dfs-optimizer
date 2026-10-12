@@ -9,6 +9,7 @@ highspy>=1.7
 nflreadpy>=0.1.5
 polars>=1.0
 streamlit>=1.58
+tzdata>=2024.1
 
 # Testing
 pytest>=8.0

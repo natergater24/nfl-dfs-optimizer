@@ -1,6 +1,9 @@
 """Formatting and small widgets shared by the app's tabs."""
 from __future__ import annotations
 
+import datetime as dt
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 
 TIER_ICON = {"Chalk": "🔥 Chalk", "Popular": "Popular", "Moderate": "Moderate", "Contrarian": "💎 Contrarian"}
@@ -14,6 +17,10 @@ KEY_MARKDOWN = (
     "**Matchup** — points the defense allows to that position (last 6 games)\n"
     "- 🟩 green = soft defense · 🟥 red = tough defense\n\n"
     "_Cash games: lean Chalk. Tournaments: mix in Moderate/Contrarian._")
+
+EASTERN = ZoneInfo("America/New_York")
+# (weekday Mon=0, hour, minute) in US Eastern. Mirrors scripts/launchagents: Tue 9:00, Thu 9:00, Sun 9:00, Sun 11:45.
+SCHEDULE_ET = ((1, 9, 0), (3, 9, 0), (6, 9, 0), (6, 11, 45))
 
 STEP_LABELS = {"salaries": "DraftKings salaries", "salaries_if_stale": "DraftKings salaries",
                "stats": "NFL stats", "stats_if_missing": "NFL stats", "vegas": "Vegas lines",
@@ -44,6 +51,35 @@ def updated_text(minutes: float | None) -> tuple[str, str]:
     if minutes < 24 * 60:
         return f"Updated {int(minutes // 60)} h ago", "orange"
     return f"Updated {int(minutes // 1440)} days ago", "red"
+
+
+def to_eastern(iso: str | None) -> dt.datetime | None:
+    """Parse a build timestamp into US Eastern; a naive timestamp is taken to already be Eastern."""
+    if not iso:
+        return None
+    try:
+        then = dt.datetime.fromisoformat(str(iso))
+    except ValueError:
+        return None
+    return then.replace(tzinfo=EASTERN) if then.tzinfo is None else then.astimezone(EASTERN)
+
+
+def format_refresh(dt_et: dt.datetime) -> str:
+    hour = dt_et.hour % 12 or 12
+    return f"{dt_et:%a %b} {dt_et.day}, {hour}:{dt_et:%M} {'AM' if dt_et.hour < 12 else 'PM'} ET"
+
+
+def next_scheduled_refresh(now_et: dt.datetime) -> dt.datetime:
+    """The first scheduled run strictly after now (wall-clock Eastern), wrapping into next week."""
+    start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+    best = None
+    for week in (0, 7):
+        for wd, hour, minute in SCHEDULE_ET:
+            day = start + dt.timedelta(days=(wd - start.weekday()) % 7 + week)
+            cand = day.replace(hour=hour, minute=minute)      # replace keeps tzinfo, so DST stays wall-clock
+            if cand > now_et and (best is None or cand < best):
+                best = cand
+    return best
 
 
 def _matchup_css(colors: list[str]):

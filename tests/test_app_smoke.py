@@ -57,3 +57,30 @@ def test_publish_warning_shown_locally_only(make_app, published_dir, tmp_path):
     assert any("phone copy may be out of date" in w.value for w in at.warning)
     at = make_app(pub, hosted="1")
     assert not any("phone copy" in w.value for w in at.warning)
+
+
+def _header_text(at):
+    return " ".join(m.value for m in at.markdown)
+
+
+def test_header_shows_last_and_next_refresh(make_app, published_dir):
+    at = make_app(published_dir)
+    assert not at.exception
+    text = _header_text(at)
+    assert "Last refreshed:" in text and "next automatic refresh" in text
+    assert "Thu Oct 15, 9:00 AM ET" in text                        # built_at_utc 13:00Z = 9:00 AM EDT
+
+
+def test_hosted_has_get_latest_not_refresh(make_app, published_dir):
+    at = make_app(published_dir, hosted="1")
+    assert any(b.key == "get_latest" for b in at.button)
+    assert not any(b.key == "refresh" for b in at.button)
+    at.button(key="get_latest").click().run()
+    assert not at.exception
+    assert any("Up to date" in s.value and "Thu Oct 15, 9:00 AM ET" in s.value for s in at.success)
+
+
+def test_local_refresh_button_label(make_app, published_dir):
+    at = make_app(published_dir, hosted="0")
+    assert "Refresh data now" in at.button(key="refresh").label
+    assert not any(b.key == "get_latest" for b in at.button)

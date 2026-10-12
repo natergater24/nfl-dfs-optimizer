@@ -1,4 +1,5 @@
 """NFL DFS Lineups — Streamlit app. Runs locally (full features) and on Streamlit Community Cloud (view/build)."""
+import datetime as dt
 from pathlib import Path
 
 import streamlit as st
@@ -25,6 +26,10 @@ if data.missing_files(pub):
     st.stop()
 d, field_scores = _load(str(pub), data.stamp(pub))
 
+refreshed_at = ui.to_eastern(d.meta.get("built_at_utc") or d.meta.get("built_at"))
+if st.session_state.pop("get_latest_pending", False):          # set by "Get latest" before the reload
+    st.session_state.flash = (True, "Up to date — lineups last refreshed "
+                              + (ui.format_refresh(refreshed_at) if refreshed_at else "(time unknown)"))
 flash = st.session_state.pop("flash", None)
 if flash:                                        # (ok, headline) or (ok, headline, log tail)
     (st.success if flash[0] else st.error)(flash[1])
@@ -48,13 +53,23 @@ top = st.columns([3, 3, 1, 1], vertical_alignment="bottom")
 with top[0]:
     st.title("NFL DFS Lineups")
     text, color = ui.updated_text(data.minutes_since(d.meta.get("built_at_utc") or d.meta.get("built_at")))
-    st.markdown(f"Sunday main slate · {d.meta.get('game_count', '?')} games · :{color}[{text}]")
+    st.markdown(f"Sunday main slate · {d.meta.get('game_count', '?')} games")
+    nxt = ui.format_refresh(ui.next_scheduled_refresh(dt.datetime.now(ui.EASTERN)))
+    when = f"**Last refreshed: {ui.format_refresh(refreshed_at)}**" if refreshed_at else "**Last refreshed: unknown**"
+    age = text.removeprefix("Updated ")
+    st.markdown(f"{when} · :{color}[{age}] · next automatic refresh: {nxt}")
 label = top[1].selectbox("DraftKings contest type", list(labels), index=list(labels.values()).index("single_entry"),
                          key="contest_label")
 key = labels[label]
 with top[2].popover("ℹ️ Key", width="stretch"):
     st.markdown(ui.KEY_MARKDOWN)
-if not hosted and top[3].button("⟳ Refresh", width="stretch", key="refresh",
+if hosted and top[3].button("🔄 Get latest", width="stretch", key="get_latest",
+                            help="Loads the newest lineups your Mac has published. To fetch new injuries and lines, "
+                                 "use Refresh in the Mac app."):
+    st.session_state.get_latest_pending = True
+    st.cache_resource.clear()
+    st.rerun()
+if not hosted and top[3].button("⟳ Refresh data now", width="stretch", key="refresh",
                                 help="Re-fetch injuries and lines, then rebuild lineups (about 2 minutes)"):
     with st.spinner("Refreshing — about 2 minutes…"):
         st.session_state.flash = actions.stage_flash("refresh", actions.run_stage("refresh"))
