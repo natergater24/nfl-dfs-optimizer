@@ -84,6 +84,7 @@ LIVE DRY RUN (2026-10-12, slate Sun 2026-10-18, draft group 154941)
 - Remaining unverified: DK upload-template format (spec section 14 item 3) is confirmed on Nathan's first upload.
 
 OUTSTANDING
+- Showdown Captain Mode support (Nathan wants it later — plan separately).
 - Plan 2: Streamlit app including the "My Lineup" custom builder (added to the spec); publish to GitHub /
   Streamlit Cloud; LaunchAgent schedule (Sunday 11:45 run reuses the 9:00 Vegas lines); results import +
   sidebar guide; USER_MANUAL.
@@ -123,3 +124,10 @@ OUTSTANDING (modeling)
 - Hosted copy has "🔄 Get latest" (key get_latest: clears cache, reruns, shows "Up to date" with the new time);
   local button renamed "⟳ Refresh data now". tzdata added to requirements.txt. USER_MANUAL gained
   "If a scheduled run was missed". 209 tests pass under -W error.
+
+=== 2026-10-13: Classic relabel (branch classic-labels) ===
+- Everything is labeled DraftKings "Classic" (config.GAME_STYLE, SLATE_NAME). Contest labels: Triple Up (3x),
+  Quintuple Up (5x), 10x Multiplier, Large-Field Tournament (e.g. Millionaire Maker); keys unchanged. App takes
+  labels from CONTEST_TYPES (stored lineups.parquet labels are old until the next build). Header shows game style,
+  kickoff and cap; Key explains Classic only. Downloads: dk_classic_{key}.csv, dk_classic_my_lineup.csv
+  (build output dk_upload_recommended.csv unchanged). Lineup construction unchanged.

@@ -84,3 +84,34 @@ def test_local_refresh_button_label(make_app, published_dir):
     at = make_app(published_dir, hosted="0")
     assert "Refresh data now" in at.button(key="refresh").label
     assert not any(b.key == "get_latest" for b in at.button)
+
+
+def test_header_shows_classic_game_style_and_kickoff(make_app, published_dir):
+    at = make_app(published_dir)
+    text = _header_text(at)
+    assert "Game style: Classic" in text
+    assert "Sun Oct 18, 1:00 PM ET" in text
+    assert "2 games" in text and "$50,000 cap" in text
+
+
+def test_header_omits_kickoff_when_start_missing(make_app, published_dir, tmp_path):
+    pub = tmp_path / "pub"
+    shutil.copytree(published_dir, pub)
+    meta = json.loads((pub / "build_meta.json").read_text())
+    meta.pop("start")
+    (pub / "build_meta.json").write_text(json.dumps(meta))
+    at = make_app(pub)
+    assert not at.exception
+    assert "Game style: Classic" in _header_text(at)
+    assert "1:00 PM ET" not in _header_text(at)
+
+
+def test_selector_is_classic_contest_type(make_app, published_dir):
+    at = make_app(published_dir)
+    assert at.selectbox(key="contest_label").label == "Classic contest type"
+    assert "Triple Up (3x)" in at.selectbox(key="contest_label").options
+
+
+def test_key_popover_mentions_classic():
+    from nfldfs_app import ui
+    assert "Classic" in ui.KEY_MARKDOWN

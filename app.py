@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from nfldfs.config import CONTEST_TYPES
+from nfldfs.config import CONTEST_TYPES, GAME_STYLE, SALARY_CAP, SLATE_NAME
 from nfldfs.sim_eval import lineup_scores
 from nfldfs_app import actions, data, ui, view_builder, view_pool, view_recommended, view_sidebar
 
@@ -53,12 +53,15 @@ top = st.columns([3, 3, 1, 1], vertical_alignment="bottom")
 with top[0]:
     st.title("NFL DFS Lineups")
     text, color = ui.updated_text(data.minutes_since(d.meta.get("built_at_utc") or d.meta.get("built_at")))
-    st.markdown(f"Sunday main slate · {d.meta.get('game_count', '?')} games")
+    kickoff = ui.to_eastern(d.meta.get("start"))
+    parts = [f"**Game style: {GAME_STYLE}**", SLATE_NAME] + ([ui.format_refresh(kickoff)] if kickoff else []) \
+        + [f"{d.meta.get('game_count', '?')} games", f"${SALARY_CAP:,} cap"]
+    st.markdown(" · ".join(parts))
     nxt = ui.format_refresh(ui.next_scheduled_refresh(dt.datetime.now(ui.EASTERN)))
     when = f"**Last refreshed: {ui.format_refresh(refreshed_at)}**" if refreshed_at else "**Last refreshed: unknown**"
     age = text.removeprefix("Updated ")
     st.markdown(f"{when} · :{color}[{age}] · next automatic refresh: {nxt}")
-label = top[1].selectbox("DraftKings contest type", list(labels), index=list(labels.values()).index("single_entry"),
+label = top[1].selectbox("Classic contest type", list(labels), index=list(labels.values()).index("single_entry"),
                          key="contest_label")
 key = labels[label]
 with top[2].popover("ℹ️ Key", width="stretch"):

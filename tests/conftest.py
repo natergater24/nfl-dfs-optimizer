@@ -94,7 +94,8 @@ def published_dir(tmp_path_factory):
     res = build.build_slate(pool_base, pw, tw, SYNTH_MODEL, games, n_sims=300, seed=1, n_candidates=3,
                             field_size=150)
     out = tmp_path_factory.mktemp("published")
-    meta = {"game_count": 2, "draft_group_id": 1, "slate_date": "2026-10-18", "built_at": "2026-10-15T09:00:00",
+    meta = {"game_count": 2, "draft_group_id": 1, "slate_date": "2026-10-18",
+            "start": "2026-10-18T13:00:00", "built_at": "2026-10-15T09:00:00",
             "built_at_utc": "2026-10-15T13:00:00+00:00", "n_sims": 300, "match_rate": 1.0,
             "odds_requests_remaining": "490"}
     build.write_published(res, out, meta)

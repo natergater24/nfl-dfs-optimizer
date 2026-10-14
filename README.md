@@ -1,8 +1,8 @@
 # NFL DFS Lineup Optimizer
 
-Builds DraftKings NFL Sunday main-slate lineups for every DraftKings contest type
-(Head-to-Head, 50/50, Double Up, Multipliers, Single Entry / 3-Max, Tournament,
-Large-Field Tournament) from free data: DraftKings' own salary CSV, nflverse stats
+Builds DraftKings Classic NFL Sunday main-slate lineups for every DraftKings contest type
+(Head-to-Head, 50/50, Double Up, Triple Up (3x), Quintuple Up (5x), 10x Multiplier, Single Entry / 3-Max,
+Tournament, Large-Field Tournament (e.g. Millionaire Maker)); Showdown and other styles are not supported yet from free data: DraftKings' own salary CSV, nflverse stats
 and Vegas lines (The Odds API). Personal use; never logs in to DraftKings or enters contests.
 
 ## Setup
@@ -21,7 +21,7 @@ Everything runs on a schedule; see `USER_MANUAL.md` for the plain-language weekl
 Outputs land in `data/published/` (lineups, swaps, player pool, upload CSV, run status).
 
 `data/published/dk_upload_recommended.csv` has one row per contest type, in this order: Head-to-Head,
-50/50, Double Up, Multiplier 3x, 5x, 10x, Single Entry / 3-Max, Tournament, Large-Field Tournament.
+50/50, Double Up, Triple Up (3x), Quintuple Up (5x), 10x Multiplier, Single Entry / 3-Max, Tournament, Large-Field Tournament (e.g. Millionaire Maker).
 Upload only the row(s) you want (plus the header) to DraftKings.
 
 ## How it works

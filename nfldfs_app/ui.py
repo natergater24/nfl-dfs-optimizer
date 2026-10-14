@@ -9,6 +9,8 @@ import pandas as pd
 TIER_ICON = {"Chalk": "🔥 Chalk", "Popular": "Popular", "Moderate": "Moderate", "Contrarian": "💎 Contrarian"}
 MODEL_RELATIVE_HELP = "Share of simulated Sundays where this happens — for comparing lineups, not real-world odds."
 KEY_MARKDOWN = (
+    "**Game style:** this app builds DraftKings **Classic** lineups only (Sunday main slate). "
+    "Showdown Captain Mode, Tiers, Pick6 and other styles aren't supported yet.\n\n"
     "**Ownership** — share of the field expected to play him\n"
     "- 🔥 **Chalk** 25%+ · safe, but no edge\n"
     "- **Popular** 10–25%\n"

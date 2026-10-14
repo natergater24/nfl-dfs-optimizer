@@ -41,7 +41,7 @@ def render(d, key, label, field_scores):
                 f"{published_metric(d, ids, key, field_scores):.0%} of sims", help=ui.MODEL_RELATIVE_HELP)
     st.dataframe(ui.styled_lineup(rec), hide_index=True, width="stretch")
     st.caption(stack_summary(rec))
-    st.download_button("⬇ Download DraftKings upload CSV", upload_csv_text([rec]), file_name=f"dk_upload_{key}.csv",
+    st.download_button("⬇ Download DraftKings upload CSV", upload_csv_text([rec]), file_name=f"dk_classic_{key}.csv",
                        mime="text/csv", key=f"dl_{key}")
 
     with st.expander("Alternates (#2 and #3)"):

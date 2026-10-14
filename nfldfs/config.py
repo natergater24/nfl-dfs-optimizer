@@ -19,6 +19,8 @@ DOWNLOADS = Path(os.environ.get("NFLDFS_DOWNLOADS", str(Path.home() / "Downloads
 VEGAS_REUSE_HOURS = 4              # Sunday 11:45 reuses the 9:00 lines
 VEGAS_FALLBACK_HOURS = 48          # if the odds fetch fails, reuse lines up to this old (loud warning)
 
+GAME_STYLE = "Classic"             # the only DraftKings game style the app builds
+SLATE_NAME = "Sunday main slate"
 SALARY_CAP = 50_000
 MIN_SALARY_DEFAULT = 49_000
 FIELD_MIN_SALARY = 45_000          # simulated opponents leave a bit more salary unused
@@ -51,14 +53,14 @@ CONTEST_TYPES = {
     "h2h": _contest("Head-to-Head", "Cash", _CASH, {"kind": "h2h"}),
     "fifty_fifty": _contest("50/50", "Cash", _CASH, {"kind": "top_pct", "pct": 0.50}),
     "double_up": _contest("Double Up", "Cash", _CASH, {"kind": "top_pct", "pct": 0.44}),
-    "multiplier_3x": _contest("Multiplier (3x)", "Multiplier", _MULT, {"kind": "top_pct", "pct": 1 / 3}),
-    "multiplier_5x": _contest("Multiplier (5x)", "Multiplier", _MULT, {"kind": "top_pct", "pct": 0.20}),
-    "multiplier_10x": _contest("Multiplier (10x)", "Multiplier", _MULT, {"kind": "top_pct", "pct": 0.10}),
+    "multiplier_3x": _contest("Triple Up (3x)", "Multiplier", _MULT, {"kind": "top_pct", "pct": 1 / 3}),
+    "multiplier_5x": _contest("Quintuple Up (5x)", "Multiplier", _MULT, {"kind": "top_pct", "pct": 0.20}),
+    "multiplier_10x": _contest("10x Multiplier", "Multiplier", _MULT, {"kind": "top_pct", "pct": 0.10}),
     "single_entry": _contest("Single Entry / 3-Max Tournament", "Tournament",
                              {"ceiling": 1.0, "own_penalty": 0.05}, {"kind": "top_pct", "pct": 0.01}),
     "tournament": _contest("Tournament", "Tournament",
                            {"ceiling": 1.0, "own_penalty": 0.15}, {"kind": "top_pct", "pct": 0.01}),
-    "large_tournament": _contest("Large-Field Tournament", "Tournament",
+    "large_tournament": _contest("Large-Field Tournament (e.g. Millionaire Maker)", "Tournament",
                                  {"ceiling": 1.0, "own_penalty": 0.30}, {"kind": "top_pct", "pct": 0.01}),
 }
 

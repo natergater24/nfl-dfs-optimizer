@@ -40,3 +40,10 @@ Request (approved by Nathan in chat)
 - Phone gets a "Get latest" button; Mac button renamed "Refresh data now".
 - Document what happens when a scheduled run is missed; add the phone link (nfl-dfs-optimizer.streamlit.app).
 - Done on branch refresh-note, 209 tests passing under -W error.
+
+SESSION LOG - 2026-10-13 (Classic relabel)
+
+Request (approved by Nathan in chat)
+- Label everything as DraftKings Classic; use DraftKings contest names (Triple Up, Quintuple Up, 10x Multiplier,
+  Large-Field Tournament e.g. Millionaire Maker); show kickoff and cap in the header; note other styles are
+  unsupported. Showdown Captain Mode added to OUTSTANDING. No change to lineup construction.

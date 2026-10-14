@@ -25,7 +25,7 @@ Your Mac must be plugged in. It wakes itself 5 minutes before each run.
 
 ## Your 2 minutes on Sunday
 1. Open the app — on your phone (https://nfl-dfs-optimizer.streamlit.app/) or on the Mac (double-click **Launch_NFL_DFS** on the Desktop).
-2. Pick the **DraftKings contest type** you're entering (top of the page).
+2. In the DraftKings app choose **Classic** and the **Sunday 1:00 PM main slate**, then pick the matching **Classic contest type** in this app (top of the page). Showdown Captain Mode, Tiers, Pick6 and other game styles aren't supported yet.
 3. Use the ⭐ **Recommended** lineup, or build your own in 🛠 **My Lineup**.
 4. Click **Download** and upload that CSV on DraftKings (Lineups → Upload Lineups).
 
