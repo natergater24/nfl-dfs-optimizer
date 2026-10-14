@@ -52,7 +52,8 @@ def updated_text(minutes: float | None) -> tuple[str, str]:
         return f"Updated {max(int(minutes), 0)} min ago", "green"
     if minutes < 24 * 60:
         return f"Updated {int(minutes // 60)} h ago", "orange"
-    return f"Updated {int(minutes // 1440)} days ago", "red"
+    days = int(minutes // 1440)
+    return f"Updated {days} day{'' if days == 1 else 's'} ago", "red"
 
 
 def to_eastern(iso: str | None) -> dt.datetime | None:

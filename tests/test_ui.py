@@ -57,3 +57,8 @@ def test_next_scheduled_refresh():
     assert ui.format_refresh(_next("2026-10-13T09:00:00")) == "Thu Oct 15, 9:00 AM ET"      # exactly on a run
     assert ui.format_refresh(_next("2026-10-18T10:00:00")) == "Sun Oct 18, 11:45 AM ET"
     assert ui.format_refresh(_next("2026-10-18T12:00:00")) == "Tue Oct 20, 9:00 AM ET"      # wraps to next week
+
+
+def test_updated_text_singular_day():
+    assert ui.updated_text(1500) == ("Updated 1 day ago", "red")
+    assert ui.updated_text(3000) == ("Updated 2 days ago", "red")
