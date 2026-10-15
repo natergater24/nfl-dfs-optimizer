@@ -1,15 +1,36 @@
 {
-  "stage": "build",
-  "started": "2026-10-12T16:11:06",
-  "finished": "2026-10-12T16:13:14",
+  "stage": "thursday",
+  "started": "2026-10-15T09:01:02",
+  "finished": "2026-10-15T09:09:56",
   "ok": true,
   "steps": [
     {
-      "name": "build",
-      "started": "2026-10-12T16:11:06",
-      "finished": "2026-10-12T16:13:14",
+      "name": "salaries_if_stale",
+      "started": "2026-10-15T09:01:02",
+      "finished": "2026-10-15T09:01:02",
       "ok": true,
-      "message": "9 contest types built; name match rate 83%; unmatched: Ahmani Marshall, Al-Jay Henderson, Andrew Armstrong, Antwane Wells Jr., Ben Mann, Brandon Smith, Brennan Presley, Brock Lampe, CJ Daniels, CJ Dippre"
+      "message": "skipped: this week's salaries are already downloaded"
+    },
+    {
+      "name": "stats_if_missing",
+      "started": "2026-10-15T09:01:02",
+      "finished": "2026-10-15T09:01:02",
+      "ok": true,
+      "message": "skipped: stats current through 2026 week 5"
+    },
+    {
+      "name": "vegas",
+      "started": "2026-10-15T09:01:02",
+      "finished": "2026-10-15T09:01:03",
+      "ok": true,
+      "message": "28 games with lines; Odds API requests remaining: 489"
+    },
+    {
+      "name": "build",
+      "started": "2026-10-15T09:01:03",
+      "finished": "2026-10-15T09:09:56",
+      "ok": true,
+      "message": "9 contest types built; name match rate 83%; unmatched: Ahmani Marshall, Al-Jay Henderson, Andrew Armstrong, Antwane Wells Jr., Behren Morton, Ben Mann, Brandon Smith, Brennan Presley, Brock Lampe, CJ Dippre"
     }
   ]
 }
