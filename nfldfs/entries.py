@@ -40,6 +40,8 @@ def empty_entries() -> pd.DataFrame:
 def _coerce(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     for c in ENTRY_COLUMNS:
+        if c not in df.columns:
+            df[c] = float("nan") if c in NUMERIC else ""
         if c in NUMERIC:
             df[c] = pd.to_numeric(df[c], errors="coerce").astype("float64")
         else:

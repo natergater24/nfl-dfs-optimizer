@@ -8,7 +8,7 @@ import streamlit as st
 
 from nfldfs.config import CONTEST_TYPES, SALARY_CAP
 from nfldfs.dk_rules import ROSTER_SLOTS, upload_csv_text, validate_lineup
-from nfldfs_app import ui
+from nfldfs_app import actions, data, ui
 from nfldfs_app.scoring import published_metric
 
 BUILDER_FIELDS = ["dk_id", "name", "position", "team", "opp", "salary", "median", "ceiling", "own_pct", "tier",
@@ -111,8 +111,11 @@ def render(d, key, label, field_scores):
         st.rerun()
 
     csv = upload_csv_text([by.loc[status["picked"]].reset_index()]) if status["valid"] else ""
+    hosted = data.is_hosted()
     st.download_button("⬇ Download My Lineup (DraftKings CSV)", csv, file_name="dk_classic_my_lineup.csv",
-                       mime="text/csv", disabled=not status["valid"], key="dl_mine")
+                       mime="text/csv", disabled=not status["valid"], key="dl_mine",
+                       on_click=None if hosted else actions.record_my_build,
+                       args=None if hosted else (status["picked"], d.meta.get("slate_date", "")))
     if status["valid"]:
         with st.expander("Side by side with the recommended lineup"):
             rec = d.lineups[(d.lineups.contest_key == key) & (d.lineups["rank"] == 0)].reset_index(drop=True)

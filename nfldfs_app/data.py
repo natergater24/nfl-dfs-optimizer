@@ -13,9 +13,12 @@ import numpy as np
 import pandas as pd
 
 from nfldfs import config
+from nfldfs import entries as entries_mod
+from nfldfs import player_history
 
 REQUIRED_FILES = ("player_pool.parquet", "lineups.parquet", "swaps.parquet", "sims.npy", "field.npy",
                   "build_meta.json")
+HISTORY_FILES = ("entries.parquet", "player_weeks.parquet")
 OPTIONAL_FILES = ("run_status.json", "results_status.json", "report_card.json")
 MATCHUP_DEFAULTS = {"mu_label": "Neutral", "mu_color": "#8a8a3d", "mu_text": ""}
 
@@ -37,8 +40,11 @@ def missing_files(pub: Path) -> list[str]:
 
 def stamp(pub: Path) -> tuple:
     pub = Path(pub)
-    return tuple((f, (pub / f).stat().st_mtime if (pub / f).exists() else 0.0)
+    hist = pub.parent / "history"
+    base = tuple((f, (pub / f).stat().st_mtime if (pub / f).exists() else 0.0)
                  for f in (*REQUIRED_FILES, *OPTIONAL_FILES))
+    return base + tuple((f"history/{f}", (hist / f).stat().st_mtime if (hist / f).exists() else 0.0)
+                        for f in HISTORY_FILES)
 
 
 def _json(p: Path) -> dict:
@@ -56,6 +62,8 @@ class AppData:
     run_status: dict
     results_status: dict
     report_card: dict
+    entries: pd.DataFrame = dc_field(default_factory=pd.DataFrame)
+    player_weeks: pd.DataFrame = dc_field(default_factory=pd.DataFrame)
     row_of: dict = dc_field(default_factory=dict)
 
     def __post_init__(self):
@@ -64,6 +72,7 @@ class AppData:
 
 def load(pub: Path) -> AppData:
     pub = Path(pub)
+    hist = pub.parent / "history"
     pool = pd.read_parquet(pub / "player_pool.parquet")
     for col, default in MATCHUP_DEFAULTS.items():          # builds made before matchups existed
         if col not in pool.columns:
@@ -75,7 +84,9 @@ def load(pub: Path) -> AppData:
                    field=np.load(pub / "field.npy").astype(np.int64),
                    meta=_json(pub / "build_meta.json"), run_status=_json(pub / "run_status.json"),
                    results_status=_json(pub / "results_status.json"),
-                   report_card=_json(pub / "report_card.json"))
+                   report_card=_json(pub / "report_card.json"),
+                   entries=entries_mod.load_entries(hist / "entries.parquet"),
+                   player_weeks=player_history.load(hist / "player_weeks.parquet"))
 
 
 def minutes_since(iso: str | None, now: dt.datetime | None = None) -> float | None:

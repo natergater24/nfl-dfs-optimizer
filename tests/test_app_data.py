@@ -24,3 +24,20 @@ def test_minutes_since_naive_and_aware():
     aware_now = dt.datetime(2026, 10, 15, 14, 0, tzinfo=dt.timezone.utc)
     assert data.minutes_since("2026-10-15T13:00:00+00:00", aware_now) == 60
     assert data.minutes_since(None) is None
+
+
+def test_load_reads_history_when_present(published_dir, tmp_path):
+    import shutil
+    import pandas as pd
+    root = tmp_path / "data"
+    shutil.copytree(published_dir, root / "published")
+    (root / "history").mkdir()
+    pd.DataFrame({"entry_id": ["1"]}).to_parquet(root / "history" / "entries.parquet", index=False)
+    d = data.load(root / "published")
+    assert len(d.entries) == 1 and d.player_weeks.empty
+    assert any("entries.parquet" in str(k) for k, _ in data.stamp(root / "published"))
+
+
+def test_load_without_history_gives_empty_frames(published_dir):
+    d = data.load(published_dir)
+    assert d.entries.empty and d.player_weeks.empty
