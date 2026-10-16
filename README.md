@@ -24,6 +24,9 @@ Outputs land in `data/published/` (lineups, swaps, player pool, upload CSV, run 
 50/50, Double Up, Triple Up (3x), Quintuple Up (5x), 10x Multiplier, Single Entry / 3-Max, Tournament, Large-Field Tournament (e.g. Millionaire Maker).
 Upload only the row(s) you want (plus the header) to DraftKings.
 
+My Results tab: your contest entries (place, points, winnings, which app lineup) filled from exported standings
+plus typed winnings, and per-player history. Needs `DK_USERNAME` in `env.txt`; usernames are never published.
+
 ## How it works
 Spec: `docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md`.
 Vegas implied totals → expected team volume → player shares → 10,000 correlated game

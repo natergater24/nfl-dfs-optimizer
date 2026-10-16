@@ -131,3 +131,19 @@ OUTSTANDING (modeling)
   labels from CONTEST_TYPES (stored lineups.parquet labels are old until the next build). Header shows game style,
   kickoff and cap; Key explains Classic only. Downloads: dk_classic_{key}.csv, dk_classic_my_lineup.csv
   (build output dk_upload_recommended.csv unchanged). Lineup construction unchanged.
+
+=== 2026-10-16: My Results (branch my-results) ===
+- New modules: nfldfs/entries.py (entries from standings, upsert, parse_lineup), nfldfs/player_history.py (search).
+- Files: data/history/entries.parquet + player_weeks.parquet (published, no usernames);
+  data/processed/contests.parquet, slate_lineups/, my_builds.parquet, week_dates.parquet (local).
+- slate_lineups/ is a separate folder because results.latest_slate_snapshot's \w+ regex would match *_lineups
+  files in slates/.
+- DK_USERNAME comes from env.txt via config.dk_username(); sidebar reminder if missing; never published.
+- results.parquet kept (not folded into player_weeks) so the report card and ownership model are unchanged.
+- Unknown contest type stored as "" and shown "Type not set". typed_fields protects typed values from imports.
+- Display numbers are pre-formatted as strings: st.dataframe shows None for nulls despite Styler na_rep.
+- DST actual points come only from standings imports in v1.
+OUTSTANDING (My Results)
+- Verify the real standings Lineup/EntryName format with Nathan's first file (Sun Oct 18 Double Up).
+- Check the DK HISTORY page for an entry-history CSV; if present, plan an import for fees/winnings.
+- Finalize the sidebar import guide wording.

@@ -47,3 +47,10 @@ Request (approved by Nathan in chat)
 - Label everything as DraftKings Classic; use DraftKings contest names (Triple Up, Quintuple Up, 10x Multiplier,
   Large-Field Tournament e.g. Millionaire Maker); show kickoff and cap in the header; note other styles are
   unsupported. Showdown Captain Mode added to OUTSTANDING. No change to lineup construction.
+
+SESSION LOG - 2026-10-16 (My Results)
+
+Request (approved by Nathan in chat)
+- New My Results tab: contest entries (place, points, lineup source, winnings typed on the Mac) built from exported
+  standings, plus a per-player history search. Phone is read-only; DK_USERNAME in env.txt, never published.
+- Built on branch my-results; docs in USER_MANUAL, README, claude-context. Real-file check pending after Sunday.

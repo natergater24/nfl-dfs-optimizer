@@ -9,7 +9,9 @@ Run these in Terminal, in the NFL_DFS folder:
    open **System Settings → Privacy & Security → Full Disk Access**, click **+**, press **⌘⇧G**, paste
    `/Library/Frameworks/Python.framework/Versions/3.14/Resources/Python.app`, click **Open**, then switch it on.
 4. Stay logged in on the Mac and keep it plugged in — scheduled runs only happen while you're logged in.
-5. The Mac app keeps the Mac awake while it's open. Quit it when you're done: **Ctrl+C** in its Terminal
+5. For My Results, add one line to `env.txt`: `DK_USERNAME=<your DraftKings username>`. The app shows a reminder
+   in the sidebar if it's missing. The username stays on your Mac and is never published.
+6. The Mac app keeps the Mac awake while it's open. Quit it when you're done: **Ctrl+C** in its Terminal
    window, or run `pkill -f "streamlit run app.py"`.
 
 ## What happens automatically each week
@@ -42,6 +44,26 @@ Green matchup = soft defense, red = tough defense.
 ## After Sunday's games (optional, 2 clicks)
 Follow **📥 How to import last week's results** in the app's sidebar. The 📈 report card then shows how
 close the projections were. After 3 imported weeks, ownership estimates start learning from your results.
+
+## 📒 My Results
+The **📒 My Results** tab keeps a record of your contest entries and how each player did.
+
+**What fills in by itself.** After you export a contest's standings (the sidebar import guide), the app finds your
+entries and fills in the place, your points, which app lineup it was (if any), and actual vs. projected points.
+If the app saw that contest in the DraftKings lobby, the entry fee and contest name fill in too.
+
+**Winnings (Mac only).** DraftKings' standings don't include them, so type them in: open the entry, fill the boxes
+(winnings, and entry fee or contest type if they're blank), then **Save**. A 💲 marks entries still waiting on
+winnings. For a contest you didn't export, use **➕ Add entry by hand**.
+
+**My Lineup downloads.** Lineups you download from 🛠 My Lineup on the Mac are remembered, so those entries show
+**My Lineup build**. Downloads made on your phone can't be remembered.
+
+**Player history.** Pick a player to see his weeks. **Every slate the app projected** shows all weeks; **Only my
+entries** shows just weeks you played him. Actual points fill in after the Tuesday run; actual ownership fills in
+after a standings import.
+
+**On your phone** My Results is read-only and says "Edit on your Mac".
 
 ## If a scheduled run was missed
 - **Mac asleep:** the missed run happens as soon as it wakes.
