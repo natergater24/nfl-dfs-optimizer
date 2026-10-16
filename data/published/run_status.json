@@ -1,37 +1,15 @@
 {
-  "stage": "thursday",
-  "started": "2026-10-15T09:01:02",
-  "finished": "2026-10-15T09:09:56",
+  "stage": "build",
+  "started": "2026-10-16T11:33:15",
+  "finished": "2026-10-16T11:35:33",
   "ok": true,
   "steps": [
     {
-      "name": "salaries_if_stale",
-      "started": "2026-10-15T09:01:02",
-      "finished": "2026-10-15T09:01:02",
-      "ok": true,
-      "message": "skipped: this week's salaries are already downloaded"
-    },
-    {
-      "name": "stats_if_missing",
-      "started": "2026-10-15T09:01:02",
-      "finished": "2026-10-15T09:01:02",
-      "ok": true,
-      "message": "skipped: stats current through 2026 week 5"
-    },
-    {
-      "name": "vegas",
-      "started": "2026-10-15T09:01:02",
-      "finished": "2026-10-15T09:01:03",
-      "ok": true,
-      "message": "28 games with lines; Odds API requests remaining: 489"
-    },
-    {
       "name": "build",
-      "started": "2026-10-15T09:01:03",
-      "finished": "2026-10-15T09:09:56",
+      "started": "2026-10-16T11:33:15",
+      "finished": "2026-10-16T11:35:33",
       "ok": true,
       "message": "9 contest types built; name match rate 83%; unmatched: Ahmani Marshall, Al-Jay Henderson, Andrew Armstrong, Antwane Wells Jr., Behren Morton, Ben Mann, Brandon Smith, Brennan Presley, Brock Lampe, CJ Dippre"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
