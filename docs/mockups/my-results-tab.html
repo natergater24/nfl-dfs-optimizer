@@ -1,0 +1,210 @@
+<title>My Results Tab Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: app-like single column — header, season scoreboard, by-contest strip, filterable entry log with expandable box scores. */
+:root {
+  --bg: #f5f6f2; --panel: #ffffff; --ink: #17201a; --muted: #5d6b61; --line: #dde3dc;
+  --turf: #1f7a43; --turf-soft: #e3f2e8; --loss: #b3412f; --loss-soft: #f8e6e2; --gold: #a86b00; --gold-soft: #fbf0d9;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "Source Sans 3", -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1411; --panel: #171e19; --ink: #e8efe9; --muted: #98a69c; --line: #2a342d;
+  --turf: #4cc47f; --turf-soft: #183323; --loss: #ff8b78; --loss-soft: #3a201b; --gold: #f2b84b; --gold-soft: #33280f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1411; --panel: #171e19; --ink: #e8efe9; --muted: #98a69c; --line: #2a342d;
+  --turf: #4cc47f; --turf-soft: #183323; --loss: #ff8b78; --loss-soft: #3a201b; --gold: #f2b84b; --gold-soft: #33280f; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 18px; }
+.note { font-size: 13px; color: var(--gold); background: var(--gold-soft); border-radius: 8px; padding: 8px 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tab { padding: 8px 12px; color: var(--muted); font-weight: 600; font-size: 14px; }
+.tab.on { color: var(--ink); border-bottom: 3px solid var(--turf); }
+h1 { font-family: var(--display); font-size: 34px; margin: 0; letter-spacing: .5px; text-wrap: balance; }
+h2 { font-family: var(--display); font-size: 20px; letter-spacing: 1px; text-transform: uppercase; margin: 0; color: var(--muted); }
+.sub { color: var(--muted); margin: 2px 0 0; }
+.board { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.stat .k { font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.stat .v { font-family: var(--display); font-size: 30px; font-variant-numeric: tabular-nums; }
+.pos { color: var(--turf); } .neg { color: var(--loss); }
+.bytype { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.chip { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.chip b { display: block; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.filters label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+select, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+button { cursor: pointer; } button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--turf); outline-offset: 2px; }
+.addbtn { font-weight: 600; }
+.mac { font-size: 11px; color: var(--muted); border: 1px dashed var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
+.log { display: grid; gap: 10px; }
+details.entry { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; border-left: 6px solid var(--line); }
+details.entry.cash { border-left-color: var(--turf); } details.entry.miss { border-left-color: var(--loss); } details.entry.pending { border-left-color: var(--gold); }
+summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; gap: 4px; }
+summary::-webkit-details-marker { display: none; }
+.row1 { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.title { font-weight: 700; }
+.meta { color: var(--muted); font-size: 13px; }
+.row2 { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pill { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; }
+.pill.cash { background: var(--turf-soft); color: var(--turf); } .pill.miss { background: var(--loss-soft); color: var(--loss); }
+.pill.pending { background: var(--gold-soft); color: var(--gold); }
+.more { font-size: 13px; color: var(--muted); }
+details[open] .more::after { content: " ▲"; } details:not([open]) .more::after { content: " ▼"; }
+.box { padding: 0 14px 14px; display: grid; gap: 10px; }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 520px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+td.n, th.n { text-align: right; }
+.edit { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+.empty { color: var(--muted); padding: 14px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="note">Mockup with <b>sample numbers</b> — no real entries yet. This is how the new tab would look in your NFL DFS app.</div>
+
+  <nav class="tabs" aria-label="App tabs">
+    <span class="tab">⭐ Recommended</span><span class="tab">🛠 My Lineup</span><span class="tab">📋 Player pool</span><span class="tab on">📒 My Results</span>
+  </nav>
+
+  <header>
+    <h1>My Results</h1>
+    <p class="sub">DraftKings Classic entries matched from your exports · updated after each import</p>
+  </header>
+
+  <section class="board" aria-label="Season totals">
+    <h2 id="totals-h">2026 season totals</h2>
+    <div class="stats" id="stats"></div>
+    <div class="bytype" id="bytype"></div>
+  </section>
+
+  <section class="filters" aria-label="Filters">
+    <label>Season<select id="f-season"><option>2026</option></select></label>
+    <label>Contest type<select id="f-type"><option value="all">All types</option></select></label>
+    <label>Lineup source<select id="f-src"><option value="all">All lineups</option><option value="app">App lineups</option><option value="mine">My builds</option></select></label>
+    <button class="addbtn" type="button" id="add">➕ Add entry by hand<span class="mac">Mac app only</span></button>
+  </section>
+
+  <section class="board" aria-label="Player search">
+    <h2>Player history</h2>
+    <div class="filters">
+      <label>Player<input id="p-q" list="p-names" placeholder="Start typing a name…" autocomplete="off" style="min-width:220px;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)"></label>
+      <datalist id="p-names"></datalist>
+      <label>Show<select id="p-scope"><option value="all">Every slate the app projected</option><option value="mine">Only my entries</option></select></label>
+    </div>
+    <div id="p-out" class="meta">Search any player to see his projected vs. actual points, ownership and your results whenever you played him.</div>
+  </section>
+
+  <section class="log" id="log" aria-label="Entry history"></section>
+</div>
+
+<script>
+const ENTRIES = [
+  {date:"Sun Oct 18", contest:"NFL GIANT $25 Double Up [Single Entry]", type:"Double Up", fee:25, won:50, place:412, field:2758, actual:138.4, proj:123.1, src:"Recommended Double Up", app:true,
+   players:[["QB","Josh Allen","BUF",7500,22.8,28.6,16,19],["RB","Kyren Williams","LAR",6800,19.4,24.1,60,41],["RB","Jaylen Warren","PIT",7000,17.7,9.8,43,33],["WR","Drake London","ATL",7000,14.6,21.3,48,37],["WR","Khalil Shakir","BUF",5300,9.7,12.4,18,14],["WR","Germie Bernard","PIT",4000,8.4,6.1,9,6],["TE","Cade Otton","TB",3300,7.7,11.0,5,4],["FLEX","Ashton Jeanty","LV",6500,16.9,15.2,56,44],["DST","Panthers","CAR",2500,6.0,9.0,23,18]]},
+  {date:"Sun Oct 18", contest:"NFL $20 Tournament [3 Entry Max]", type:"Single Entry / 3-Max Tournament", fee:20, won:null, place:1890, field:11890, actual:131.0, proj:121.7, src:"My Lineup build", app:false, players:[]},
+  {date:"Sun Oct 11", contest:"NFL $10 Triple Up", type:"Triple Up (3x)", fee:10, won:0, place:2204, field:4100, actual:112.6, proj:124.0, src:"Alternate #2", app:true, players:[]},
+  {date:"Sun Oct 11", contest:"NFL $5 Double Up", type:"Double Up", fee:5, won:10, place:1301, field:3400, actual:129.9, proj:122.5, src:"Recommended Double Up", app:true, players:[]},
+  {date:"Sun Oct 4", contest:"NFL $25 Head-to-Head", type:"Head-to-Head", fee:25, won:45, place:1, field:2, actual:141.2, proj:126.0, src:"Recommended Head-to-Head", app:true, players:[]},
+  {date:"Sun Oct 4", contest:"NFL $10 Large-Field Tournament", type:"Large-Field Tournament (e.g. Millionaire Maker)", fee:10, won:0, place:88412, field:161764, actual:118.3, proj:120.4, src:"Recommended Large-Field", app:true, players:[]},
+];
+const $ = id => document.getElementById(id);
+const money = v => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString();
+const signed = v => (v > 0 ? "+" : v < 0 ? "−" : "") + "$" + Math.abs(Math.round(v)).toLocaleString();
+const ord = n => { const t = n % 100, s = (t >= 11 && t <= 13) ? "th" : ({1: "st", 2: "nd", 3: "rd"}[n % 10] || "th"); return n.toLocaleString() + s; };
+const pts = v => (v > 0 ? "+" : "") + v.toFixed(1);
+const types = [...new Set(ENTRIES.map(e => e.type))];
+types.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; $("f-type").appendChild(o); });
+
+function filtered() {
+  const t = $("f-type").value, s = $("f-src").value;
+  return ENTRIES.filter(e => (t === "all" || e.type === t) && (s === "all" || (s === "app") === e.app));
+}
+function totals(list) {
+  const done = list.filter(e => e.won !== null);
+  const fees = done.reduce((a, e) => a + e.fee, 0), won = done.reduce((a, e) => a + e.won, 0);
+  const cashed = done.filter(e => e.won > 0).length;
+  const diff = list.length ? list.reduce((a, e) => a + e.actual - e.proj, 0) / list.length : 0;
+  const avgA = list.length ? list.reduce((a, e) => a + e.actual, 0) / list.length : 0;
+  return {n: list.length, done: done.length, cashed, fees, won, profit: won - fees, roi: fees ? (won - fees) / fees * 100 : 0, diff, avgA, missing: list.length - done.length};
+}
+function renderStats(list) {
+  const t = totals(list);
+  $("stats").innerHTML = [
+    ["Entries", t.n], ["Cashed", `${t.cashed} <span style="font-size:18px">(${t.done ? Math.round(t.cashed / t.done * 100) : 0}%)</span>`],
+    ["Fees", money(t.fees)], ["Winnings", money(t.won)],
+    ["Profit", `<span class="${t.profit >= 0 ? "pos" : "neg"}">${signed(t.profit)}</span>`],
+    ["ROI", `<span class="${t.roi >= 0 ? "pos" : "neg"}">${t.roi >= 0 ? "+" : "−"}${Math.abs(t.roi).toFixed(0)}%</span>`],
+    ["Avg actual vs projected", `${t.avgA.toFixed(1)} <span class="${t.diff >= 0 ? "pos" : "neg"}" style="font-size:18px">(${pts(t.diff)})</span>`],
+  ].map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")
+   + (t.missing ? `<div class="stat"><div class="k">Waiting on winnings</div><div class="v" style="color:var(--gold)">${t.missing}</div></div>` : "");
+  $("bytype").innerHTML = types.map(ty => {
+    const s = totals(list.filter(e => e.type === ty)); if (!s.n) return "";
+    return `<div class="chip"><b>${ty}</b>${s.n} ${s.n === 1 ? "entry" : "entries"} · ${s.cashed} cashed · <span class="${s.profit >= 0 ? "pos" : "neg"}">${signed(s.profit)}</span></div>`;
+  }).join("");
+}
+function renderLog(list) {
+  if (!list.length) { $("log").innerHTML = `<div class="empty">No entries match these filters.</div>`; return; }
+  $("log").innerHTML = list.map((e, i) => {
+    const status = e.won === null ? "pending" : e.won > 0 ? "cash" : "miss";
+    const pill = status === "pending" ? `<span class="pill pending">💲 Add winnings</span>` : status === "cash" ? `<span class="pill cash">✅ Cashed</span>` : `<span class="pill miss">✗ Didn’t cash</span>`;
+    const money1 = e.won === null ? `Fee ${money(e.fee)} → winnings not entered yet` : `Fee ${money(e.fee)} → Won ${money(e.won)} (<span class="${e.won - e.fee >= 0 ? "pos" : "neg"}">${signed(e.won - e.fee)}</span>)`;
+    const table = e.players.length ? `<div class="tbl"><table><thead><tr><th>Pos</th><th>Player</th><th>Team</th><th class="n">Salary</th><th class="n">Projected</th><th class="n">Actual</th><th class="n">+/−</th><th class="n">Own est.</th><th class="n">Own actual</th></tr></thead><tbody>${
+      e.players.map(p => `<tr><td>${p[0]}</td><td>${p[1]}</td><td>${p[2]}</td><td class="n">${money(p[3])}</td><td class="n">${p[4].toFixed(1)}</td><td class="n">${p[5].toFixed(1)}</td><td class="n ${p[5] - p[4] >= 0 ? "pos" : "neg"}">${pts(p[5] - p[4])}</td><td class="n">${p[6]}%</td><td class="n">${p[7]}%</td></tr>`).join("")
+    }</tbody></table></div>` : `<div class="meta">Player-by-player box score appears here (same table as the first entry).</div>`;
+    return `<details class="entry ${status}" ${i === 0 ? "open" : ""}>
+      <summary>
+        <div class="row1"><span class="title">${e.date} · ${e.contest}</span>${pill}</div>
+        <div class="meta">Classic · ${e.type} · Lineup: ${e.src}</div>
+        <div class="row2"><span>${money1}</span><span>${ord(e.place)} of ${e.field.toLocaleString()}</span><span>Actual ${e.actual.toFixed(1)} vs projected ${e.proj.toFixed(1)} (<span class="${e.actual - e.proj >= 0 ? "pos" : "neg"}">${pts(e.actual - e.proj)}</span>)</span></div>
+        <span class="more">Players</span>
+      </summary>
+      <div class="box">${table}
+        <div class="edit">${e.won === null ? `<label for="w${i}">Winnings $</label><input id="w${i}" inputmode="decimal" placeholder="0.00" style="width:90px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)"><button type="button" data-save="${i}">Save</button>` : `<button type="button">✏️ Edit fee / winnings / type</button>`}<span class="mac">Mac app only</span></div>
+      </div>
+    </details>`;
+  }).join("");
+  document.querySelectorAll("[data-save]").forEach(b => b.addEventListener("click", () => {
+    const i = +b.dataset.save, v = parseFloat($("w" + i).value);
+    if (isNaN(v) || v < 0) { $("w" + i).style.borderColor = "var(--loss)"; return; }
+    const e = filtered()[i]; e.won = v; render();
+  }));
+}
+// Sample slate-by-slate history for player search (every week the app built projections).
+const PLAYER_WEEKS = {
+  "Josh Allen": [["Sun Oct 18","vs LV","Great",7500,22.8,28.6,16,19],["Sun Oct 11","@ NYJ","Tough",7400,21.9,17.2,12,10],["Sun Oct 4","vs MIA","Good",7600,23.4,31.0,21,24]],
+  "Kyren Williams": [["Sun Oct 18","vs ARI","Tough",6800,19.4,24.1,60,41],["Sun Oct 11","@ SF","Very tough",7000,18.1,12.3,22,18],["Sun Oct 4","vs IND","Neutral",6900,18.8,20.4,30,27]],
+  "Drake London": [["Sun Oct 18","vs CHI","Great",7000,14.6,21.3,48,37],["Sun Oct 11","@ TB","Neutral",6800,14.1,9.6,15,12],["Sun Oct 4","vs WAS","Good",6700,13.8,16.0,11,13]],
+  "Puka Nacua": [["Sun Oct 18","@ ARI","Great",8100,14.5,18.2,54,39],["Sun Oct 11","vs SF","Tough",8200,15.0,11.1,20,17],["Sun Oct 4","@ IND","Neutral",8000,15.3,24.7,26,29]],
+};
+const ROSTERED = {"Josh Allen": {"Sun Oct 18": "NFL GIANT $25 Double Up · ✅ +$25", "Sun Oct 4": "NFL $25 Head-to-Head · ✅ +$20"}, "Kyren Williams": {"Sun Oct 18": "NFL GIANT $25 Double Up · ✅ +$25"}, "Drake London": {"Sun Oct 18": "NFL GIANT $25 Double Up · ✅ +$25", "Sun Oct 11": "NFL $10 Triple Up · ✗ −$10"}};
+Object.keys(PLAYER_WEEKS).forEach(n => { const o = document.createElement("option"); o.value = n; $("p-names").appendChild(o); });
+function renderPlayer() {
+  const name = $("p-q").value.trim(), key = Object.keys(PLAYER_WEEKS).find(n => n.toLowerCase() === name.toLowerCase());
+  if (!key) { $("p-out").innerHTML = name ? `No player named “${name}” yet — try Josh Allen, Kyren Williams, Drake London or Puka Nacua in this mockup.` : "Search any player to see his projected vs. actual points, ownership and your results whenever you played him."; return; }
+  const mine = ROSTERED[key] || {};
+  let rows = PLAYER_WEEKS[key]; if ($("p-scope").value === "mine") rows = rows.filter(r => mine[r[0]]);
+  const all = PLAYER_WEEKS[key], avgP = all.reduce((a, r) => a + r[4], 0) / all.length, avgA = all.reduce((a, r) => a + r[5], 0) / all.length;
+  const used = Object.keys(mine).length;
+  $("p-out").innerHTML = `<div class="stats" style="margin-bottom:10px">
+      <div class="stat"><div class="k">Slates projected</div><div class="v">${all.length}</div></div>
+      <div class="stat"><div class="k">Avg projected → actual</div><div class="v">${avgP.toFixed(1)} → ${avgA.toFixed(1)} <span class="${avgA - avgP >= 0 ? "pos" : "neg"}" style="font-size:18px">(${pts(avgA - avgP)})</span></div></div>
+      <div class="stat"><div class="k">In my lineups</div><div class="v">${used} ${used === 1 ? "time" : "times"}</div></div></div>
+    ${rows.length ? `<div class="tbl"><table><thead><tr><th>Slate</th><th>Matchup</th><th class="n">Salary</th><th class="n">Projected</th><th class="n">Actual</th><th class="n">+/−</th><th class="n">Own est.</th><th class="n">Own actual</th><th>My entry</th></tr></thead><tbody>${
+      rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]} · ${r[2]}</td><td class="n">${money(r[3])}</td><td class="n">${r[4].toFixed(1)}</td><td class="n">${r[5].toFixed(1)}</td><td class="n ${r[5] - r[4] >= 0 ? "pos" : "neg"}">${pts(r[5] - r[4])}</td><td class="n">${r[6]}%</td><td class="n">${r[7]}%</td><td>${mine[r[0]] || "—"}</td></tr>`).join("")
+    }</tbody></table></div>` : `<div class="empty">You haven’t played ${key} yet.</div>`}`;
+}
+$("p-q").addEventListener("input", renderPlayer); $("p-scope").addEventListener("change", renderPlayer);
+$("p-q").value = "Josh Allen";
+function render() { const list = filtered(); renderStats(list); renderLog(list); renderPlayer(); }
+["f-type", "f-src"].forEach(id => $(id).addEventListener("change", render));
+$("add").addEventListener("click", () => { $("add").textContent = "In the Mac app this opens a short form: date, contest, type, fee, winnings, lineup."; });
+render();
+</script>
