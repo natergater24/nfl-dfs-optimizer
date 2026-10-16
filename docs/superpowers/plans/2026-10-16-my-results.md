@@ -69,7 +69,7 @@ data/processed/contests.parquet, slate_lineups/, my_builds.parquet, week_dates.p
 
 DraftKings standings rows (entry block): `Rank, EntryId, EntryName, TimeRemaining, Points, Lineup`; `EntryName` is the username, with ` (k/n)` appended for multi-entry; `Lineup` is slot tokens followed by player names, e.g. `DST Panthers FLEX Ashton Jeanty QB Josh Allen RB Jaylen Warren …` (format re-checked against Nathan's real file in Task 6).
 
-- [ ] **Step 1: Write the failing tests** — `tests/test_entries.py`:
+- [x] **Step 1: Write the failing tests** — `tests/test_entries.py`:
 
 ```python
 import math
@@ -252,12 +252,12 @@ def test_dk_username_from_env(monkeypatch, tmp_path):
     monkeypatch.delenv("DK_USERNAME", raising=False)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `./py -m pytest tests/test_entries.py tests/test_dk_salaries.py tests/test_config.py -v`
 Expected: ImportError for `nfldfs.entries`; `lobby_contests` / `dk_username` missing.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `nfldfs/config.py` — add below `odds_api_key`:
 
@@ -524,12 +524,12 @@ def summary_by_type(entries: pd.DataFrame) -> list[dict]:
             for key, g in e.groupby("contest_type", sort=False)]
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `./py -m pytest tests/test_entries.py tests/test_dk_salaries.py tests/test_config.py tests/test_results.py -v && ./py -m pytest -q -W error`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add nfldfs/entries.py nfldfs/results.py nfldfs/dk_salaries.py nfldfs/config.py tests/test_entries.py tests/test_dk_salaries.py tests/test_config.py
@@ -547,7 +547,7 @@ git commit -m "Add entry tracking core: find my entries, link to app lineups, to
 - Consumes: built pool columns (`dk_id, name, position, team, opp, salary, median, floor, ceiling, own_pct, playable, mu_label, mu_color`); normalized nflverse player-weeks (`name, team, position, season, week, dk_pts`); raw nflverse schedule (`season, week, game_type, gameday`); entries frame (Task 1).
 - Produces: `PW_COLUMNS`, `empty()`, `load(path)`, `slate_rows(pool, slate_date)`, `upsert_slate(path, rows)` (keeps existing actuals for that slate), `set_actuals(path, slate_date, actuals) -> int` (actuals: `dk_id` plus `actual_pts` and/or `actual_own`; non-null values overwrite), `nflverse_actuals(slate_rows, stats_week) -> DataFrame[dk_id, actual_pts]` (non-DST only), `week_dates(sched_raw) -> DataFrame[season, week, gameday]`, `week_for(week_dates, slate_date) -> (season, week) | None`, `search(pw, entries, name, mine_only=False) -> (dict, DataFrame)`.
 
-- [ ] **Step 1: Write the failing tests** — `tests/test_player_history.py`:
+- [x] **Step 1: Write the failing tests** — `tests/test_player_history.py`:
 
 ```python
 import math
@@ -628,11 +628,11 @@ def test_search_with_entries():
     assert s["slates"] == 0 and t.empty
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `./py -m pytest tests/test_player_history.py -v` → ImportError.
 
-- [ ] **Step 3: Implement `nfldfs/player_history.py`**
+- [x] **Step 3: Implement `nfldfs/player_history.py`**
 
 ```python
 """Week-by-week history of every player the app projected: projection, matchup, ownership and actual result."""
@@ -770,9 +770,9 @@ def search(pw: pd.DataFrame, entries: pd.DataFrame, name: str, mine_only: bool =
     return summary, table
 ```
 
-- [ ] **Step 4: Run tests** — `./py -m pytest tests/test_player_history.py -v && ./py -m pytest -q -W error` → all pass.
+- [x] **Step 4: Run tests** — `./py -m pytest tests/test_player_history.py -v && ./py -m pytest -q -W error` → all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add nfldfs/player_history.py tests/test_player_history.py
@@ -790,7 +790,7 @@ git commit -m "Add week-by-week player history with actuals and search" -m "Co-A
 - Consumes: Tasks 1–2.
 - Produces (files): `data/processed/contests.parquet` (merged across runs, unique `contest_id`), `data/processed/slate_lineups/<slate_date>_<dg>.parquet` (a copy of that build's `lineups.parquet`; a **separate folder** so `results.latest_slate_snapshot`'s pattern never matches it), `data/processed/week_dates.parquet`, `data/history/player_weeks.parquet`, `data/history/entries.parquet`. Helper `fill_nflverse_actuals(player_weeks_stats, week_dates_df) -> int` in `run_pipeline`.
 
-- [ ] **Step 1: Write the failing tests** — append to `tests/test_run_pipeline.py` (reuse the existing `_paths`, `_snapshot_file`, `_standings_zip` helpers and `make_pool` import; extend `_paths` to also patch nothing new — the new files live under `PROCESSED`/`HISTORY` which `_paths` already redirects):
+- [x] **Step 1: Write the failing tests** — append to `tests/test_run_pipeline.py` (reuse the existing `_paths`, `_snapshot_file`, `_standings_zip` helpers and `make_pool` import; extend `_paths` to also patch nothing new — the new files live under `PROCESSED`/`HISTORY` which `_paths` already redirects):
 
 ```python
 def _standings_zip_with_me(path):
@@ -868,9 +868,9 @@ def test_salaries_step_saves_lobby_contests(tmp_path, monkeypatch):
 
 If `_paths` doesn't create `tmp_path / "history"`, the atomic writers create parent folders automatically.
 
-- [ ] **Step 2: Run tests to verify they fail** — `./py -m pytest tests/test_run_pipeline.py -v` → the 4 new tests fail.
+- [x] **Step 2: Run tests to verify they fail** — `./py -m pytest tests/test_run_pipeline.py -v` → the 4 new tests fail.
 
-- [ ] **Step 3: Implement in `run_pipeline.py`**
+- [x] **Step 3: Implement in `run_pipeline.py`**
 
 Imports: add `entries` and `player_history` to the `from nfldfs import ...` line.
 
@@ -964,11 +964,11 @@ def fill_nflverse_actuals(stats: pd.DataFrame, wd: pd.DataFrame) -> int:
 ```
 Compute `matched` once and pass it to `append_history` (no duplicate work). Initialize `entry_notes = []` with the other lists, and append `"; " + "; ".join(sorted(set(entry_notes)))` to `msg` when non-empty (before the `skipped` check).
 
-- [ ] **Step 4: Run tests** — `./py -m pytest tests/test_run_pipeline.py -v && ./py -m pytest -q -W error` → all pass.
+- [x] **Step 4: Run tests** — `./py -m pytest tests/test_run_pipeline.py -v && ./py -m pytest -q -W error` → all pass.
 
-- [ ] **Step 5: Offline check on real data** — `./py run_pipeline.py --stage build` then confirm `data/history/player_weeks.parquet` has this slate's rows and `data/processed/slate_lineups/` has one file. Do **not** commit data files.
+- [x] **Step 5: Offline check on real data** — `./py run_pipeline.py --stage build` then confirm `data/history/player_weeks.parquet` has this slate's rows and `data/processed/slate_lineups/` has one file. Do **not** commit data files.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add run_pipeline.py tests/test_run_pipeline.py
@@ -985,7 +985,7 @@ git commit -m "Track entries and player actuals in the pipeline" -m "Co-Authored
 **Interfaces:**
 - Produces: `AppData.entries` and `AppData.player_weeks` (DataFrames; empty frames when the history files are missing), loaded from `<published>/../history/`; `data.stamp` includes those two files. `actions.record_my_build(ids, slate_date, path=None) -> None` (appends to `data/processed/my_builds.parquet`, de-duplicated by slate + player set), `actions.save_entry_edit(entry_id, **fields) -> (ok, message)`, `actions.add_entry(**fields) -> (ok, message)` — both write `data/history/entries.parquet` then call `publish.publish(config.ROOT, ["data/history"], ...)` and never raise.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_app_data.py`:
 
@@ -1034,9 +1034,9 @@ def test_save_entry_edit_and_add_entry(tmp_path, monkeypatch):
     assert not ok and "Couldn't save" in msg
 ```
 
-- [ ] **Step 2: Run tests to verify they fail** — `./py -m pytest tests/test_app_data.py tests/test_actions.py -v`.
+- [x] **Step 2: Run tests to verify they fail** — `./py -m pytest tests/test_app_data.py tests/test_actions.py -v`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `nfldfs_app/data.py`:
 - add `HISTORY_FILES = ("entries.parquet", "player_weeks.parquet")`.
@@ -1096,9 +1096,9 @@ def add_entry(**fields) -> tuple[bool, str]:
 ```
 (import `actions` and `data` from `nfldfs_app`).
 
-- [ ] **Step 4: Run tests** — `./py -m pytest tests/test_app_data.py tests/test_actions.py tests/test_view_builder.py tests/test_app_smoke.py -v && ./py -m pytest -q -W error`.
+- [x] **Step 4: Run tests** — `./py -m pytest tests/test_app_data.py tests/test_actions.py tests/test_view_builder.py tests/test_app_smoke.py -v && ./py -m pytest -q -W error`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add nfldfs_app/data.py nfldfs_app/actions.py nfldfs_app/view_builder.py tests/test_app_data.py tests/test_actions.py
@@ -1119,7 +1119,7 @@ git commit -m "Load entry history in the app; record My Lineup downloads; Mac-si
 
 Layout order (binding, from the mockup): season totals (+ by-contest-type lines) → filters + ➕ Add entry by hand (Mac only) → Player history → entry log.
 
-- [ ] **Step 1: Add a history fixture to `tests/conftest.py`**
+- [x] **Step 1: Add a history fixture to `tests/conftest.py`**
 
 ```python
 @pytest.fixture(scope="session")
@@ -1150,7 +1150,7 @@ def results_root(tmp_path_factory, published_dir):
     return root
 ```
 
-- [ ] **Step 2: Write the failing tests** — `tests/test_view_results.py`:
+- [x] **Step 2: Write the failing tests** — `tests/test_view_results.py`:
 
 ```python
 import pandas as pd
@@ -1204,9 +1204,9 @@ def test_tab_with_no_entries(make_app, published_dir):
 
 (Implementation note: `make_app` sets `NFLDFS_PUBLISHED` to the given folder; `data.load` reads `history/` next to it, which `results_root` provides.)
 
-- [ ] **Step 3: Run tests to verify they fail** — `./py -m pytest tests/test_view_results.py -v`.
+- [x] **Step 3: Run tests to verify they fail** — `./py -m pytest tests/test_view_results.py -v`.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 `nfldfs_app/ui.py` — add:
 
@@ -1403,16 +1403,16 @@ and add `with tab_res: view_results.render(d, hosted)`.
                     "username` to env.txt (see the user manual).")
 ```
 
-- [ ] **Step 5: Run tests** — `./py -m pytest tests/test_view_results.py tests/test_app_smoke.py tests/test_view_sidebar.py -v && ./py -m pytest -q -W error`. If an AppTest accessor used above differs in Streamlit 1.58 (e.g. `at.get("form")`), adapt the test to an equivalent check and note it in the report.
+- [x] **Step 5: Run tests** — `./py -m pytest tests/test_view_results.py tests/test_app_smoke.py tests/test_view_sidebar.py -v && ./py -m pytest -q -W error`. If an AppTest accessor used above differs in Streamlit 1.58 (e.g. `at.get("form")`), adapt the test to an equivalent check and note it in the report.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add nfldfs_app/view_results.py nfldfs_app/ui.py nfldfs_app/view_sidebar.py app.py tests/test_view_results.py tests/conftest.py
 git commit -m "Add the My Results tab: totals, filters, player history, entry log" -m "Co-Authored-By: <model> <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 7: Browser check (controller)** — run the local app and the hosted simulation; confirm layout order matches the mockup, filters change totals, player search shows a table, Mac edit saves and updates totals, phone view shows "Edit on your Mac".
+- [x] **Step 7: Browser check (controller)** — run the local app and the hosted simulation; confirm layout order matches the mockup, filters change totals, player search shows a table, Mac edit saves and updates totals, phone view shows "Edit on your Mac".
 
 ---
 
@@ -1421,7 +1421,7 @@ git commit -m "Add the My Results tab: totals, filters, player history, entry lo
 **Files:** `env.txt` (local, never committed), `USER_MANUAL.md`, `README.md`, `claude-context.txt`, `claude-prompts.txt`, possibly `nfldfs/entries.py` + tests if the real format differs.
 
 - [ ] **Step 1: Username (controller, with Nathan's earlier OK):** append `DK_USERNAME=natergater24` to `env.txt` without printing the file; confirm `git check-ignore env.txt`.
-- [ ] **Step 2: Docs:** USER_MANUAL — a "📒 My Results" section (what fills in automatically, typing winnings on the Mac, player search, the phone is read-only, DK_USERNAME line); README feature list; claude-context dated section incl. rulings; claude-prompts entry. Commit and push (with the code) after the final review.
+- [x] **Step 2: Docs:** USER_MANUAL — a "📒 My Results" section (what fills in automatically, typing winnings on the Mac, player search, the phone is read-only, DK_USERNAME line); README feature list; claude-context dated section incl. rulings; claude-prompts entry. Commit and push (with the code) after the final review.
 - [ ] **Step 3 (after Sun Oct 18 games): real file.** Nathan exports his Double Up standings (sidebar guide). Verify: entry created with the right place/points/lineup source; `parse_lineup` handled DK's real `Lineup` format; usernames absent from `data/history`. If the format differs, fix `parse_lineup`/`read_my_entries` with a test built from the real (redacted) row.
 - [ ] **Step 4 (after Sunday): HISTORY page screenshot.** If DraftKings offers an entry-history CSV, write a follow-up plan to import fees/winnings from it; otherwise winnings stay typed. Finalize the sidebar import guide wording from the screenshots.
 
@@ -1434,3 +1434,27 @@ git commit -m "Add the My Results tab: totals, filters, player history, entry lo
 - **Deviation from spec:** spec §5 flow 1 archives lineups as `slates/<date>_<dg>_lineups.parquet`; that name would match `results.latest_slate_snapshot`'s pattern (`\w+` matches `_`), so lineups go to a separate `processed/slate_lineups/` folder. Spec §4's `source_flags` is named `typed_fields`, and an unknown contest type is stored as `""` (shown as "Type not set") instead of `other`.
 - **Placeholder scan:** commit trailers use `<model>` deliberately (each implementer names itself). No TBDs.
 - **Type consistency:** `players` is a comma-joined string of dk_ids everywhere (entries, my_builds, search); `slate_date` is an ISO date string everywhere; `contest_type` is a `CONTEST_TYPES` key or `""`.
+
+## Build notes
+
+Fixes made during review (all on branch `my-results`, suite green with `-W error`):
+
+- Totals follow every filter (season, contest type, lineup source), not just the season.
+- Missing numbers in player history and box scores show "—" by pre-formatting them as strings
+  (`ui.display_numbers`), since Streamlit's column formats render NaN as "None".
+- "My entry" in player history lists every one of Nathan's entries that week (multi-entry), not just the first.
+- Final review wave:
+  - Edit row offers "Type not set" and leaves blank fee/winnings empty; Save sends only changed fields, so blanks
+    are never silently turned into Head-to-Head / $0 and marked typed.
+  - `processed/slate_lineups/` appends every build with `built_at` (identical lineups de-duplicated);
+    `entries.lineup_source` prefers the entry's contest type, then the latest build; older files without
+    `built_at` still work.
+  - Contest-list save, player-history upsert, lineup archive (now after `write_published`) and the nflverse
+    actual-points fill can't stop a live stage — a failure becomes "; WARNING: … failed (<ExcType>)" on the step,
+    and the app banner shows any step message containing "WARNING".
+  - Results import: reading Nathan's entries and saving player-history actuals each fail soft ("entries not read
+    (<ExcType>)" / a WARNING note); the file still imports and moves to done.
+  - Season filter uses the NFL season (`config.season_for`), so January weeks 17-18 count toward the prior season.
+  - Entry expander labels escape `$`; a save whose publish failed shows a yellow warning instead of green success.
+  - `tuesday` stage now publishes so actual points reach the phone.
+  - `_save_contests` skips empty frames (no pandas concat FutureWarning); `record_my_build` never breaks a download.

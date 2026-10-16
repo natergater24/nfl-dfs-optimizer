@@ -1,6 +1,6 @@
 # My Results — Entry Tracker & Player History (Design Spec)
 
-**Date:** 2026-10-16 · **Status:** Draft for Nathan's review
+**Date:** 2026-10-16 · **Status:** Approved · built 2026-10-16 (branch my-results)
 **Builds on:** `2026-10-11-nfl-dfs-optimizer-design.md` (engine + app, live at https://nfl-dfs-optimizer.streamlit.app/)
 **Approved mockup:** `docs/mockups/my-results-tab.html` (sample data; layout is binding, numbers are not)
 
@@ -80,3 +80,23 @@ Unit tests for: username matching incl. "(2/3)" suffixes; lineup parsing from th
 1. DraftKings standings `Lineup` column format and `EntryName` multi-entry suffix (from Nathan's first real file).
 2. Whether HISTORY offers an entry-history CSV and its columns (Nathan's screenshot after Sunday).
 3. nflverse team defensive stats availability for DST actual points.
+
+## 10. As built
+
+Deviations from the design above, as built on branch `my-results`:
+
+- `data/history/results.parquet` (per-player standings history behind the report card) is kept alongside the new
+  `data/history/player_weeks.parquet`; it was not folded into it.
+- Each slate's lineups are archived in `data/processed/slate_lineups/<date>_<draft group>.parquet`, with every build
+  (Thursday, Sunday 9:00, Sunday 11:45) appended under a `built_at` time and identical lineups de-duplicated, so an
+  entry made from any build is recognized. Matching prefers the entry's contest type, then the latest build.
+- The per-entry record of hand-typed values is the column `typed_fields` (the design called it `source_flags`).
+- An unknown contest type is stored as `""` and shown as "Type not set"; the edit row offers it and saves only the
+  fields Nathan changed, so blanks are never silently replaced.
+- Season filter uses the NFL season (`config.season_for`): January slates belong to the previous season.
+- The `tuesday` stage now publishes, so nflverse actual points reach the phone the same day.
+- Bookkeeping (contest list, player history, lineup archive, actual-points fill, entry reading) can't stop a live
+  stage; a failure becomes a "WARNING" note on the step.
+- Deferred: importing DraftKings' entry-history CSV (open item 2) and DST actual points from nflverse (open item 3).
+- Parked: **➕ Add entry by hand** has no lineup picker yet; there is no lock between app edits and a pipeline run
+  writing `entries.parquet` at the same moment.

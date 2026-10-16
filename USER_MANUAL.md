@@ -17,7 +17,7 @@ Run these in Terminal, in the NFL_DFS folder:
 ## What happens automatically each week
 | When | What your Mac does |
 |---|---|
-| Tuesday 9:00 AM | Downloads this week's DraftKings salaries and last week's NFL stats |
+| Tuesday 9:00 AM | Downloads this week's DraftKings salaries and last week's NFL stats, fills in last week's actual points, publishes to your phone |
 | Thursday 9:00 AM | Gets Vegas lines, builds every contest type's lineups, publishes to your phone |
 | Sunday 9:00 AM | Re-checks injuries and lines, rebuilds, publishes |
 | Sunday 11:45 AM | Re-checks injuries after inactives are announced, rebuilds, publishes |
@@ -50,18 +50,25 @@ The **📒 My Results** tab keeps a record of your contest entries and how each 
 
 **What fills in by itself.** After you export a contest's standings (the sidebar import guide), the app finds your
 entries and fills in the place, your points, which app lineup it was (if any), and actual vs. projected points.
-If the app saw that contest in the DraftKings lobby, the entry fee and contest name fill in too.
+An entry made from any of the slate's builds (Thursday, Sunday 9:00 or Sunday 11:45) is recognized, even if a
+later rebuild changed the lineup. If the app saw that contest in the DraftKings lobby, the entry fee and contest
+name fill in too. If it can't tell the contest type, the entry shows **Type not set**.
 
 **Winnings (Mac only).** DraftKings' standings don't include them, so type them in: open the entry, fill the boxes
-(winnings, and entry fee or contest type if they're blank), then **Save**. A 💲 marks entries still waiting on
-winnings. For a contest you didn't export, use **➕ Add entry by hand**.
+(winnings, and entry fee or contest type if they're blank), then **Save**. Only the boxes you change are saved; a
+blank fee or a **Type not set** you leave alone stays blank. If saving worked but the phone copy couldn't be
+updated, you'll see a yellow warning instead of the green "Saved". A 💲 marks entries still waiting on winnings.
+For a contest you didn't export, use **➕ Add entry by hand**.
 
 **My Lineup downloads.** Lineups you download from 🛠 My Lineup on the Mac are remembered, so those entries show
 **My Lineup build**. Downloads made on your phone can't be remembered.
 
 **Player history.** Pick a player to see his weeks. **Every slate the app projected** shows all weeks; **Only my
-entries** shows just weeks you played him. Actual points fill in after the Tuesday run; actual ownership fills in
-after a standings import.
+entries** shows just weeks you played him. Actual points fill in after the Tuesday run (which also publishes
+them to your phone); actual ownership fills in after a standings import.
+
+**Season filter.** Seasons are NFL seasons: games in January (weeks 17-18) count toward the season that started
+the previous September.
 
 **On your phone** My Results is read-only and says "Edit on your Mac".
 

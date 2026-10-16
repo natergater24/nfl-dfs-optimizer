@@ -26,6 +26,10 @@ Upload only the row(s) you want (plus the header) to DraftKings.
 
 My Results tab: your contest entries (place, points, winnings, which app lineup) filled from exported standings
 plus typed winnings, and per-player history. Needs `DK_USERNAME` in `env.txt`; usernames are never published.
+Every build of a slate is archived in `data/processed/slate_lineups/`, so entries from any build are recognized.
+The `tuesday` stage fills nflverse actual points and publishes them. Season filter = NFL season (January slates
+belong to the prior season). Unknown contest types show "Type not set". Spec:
+`docs/superpowers/specs/2026-10-16-my-results-design.md`.
 
 ## How it works
 Spec: `docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md`.

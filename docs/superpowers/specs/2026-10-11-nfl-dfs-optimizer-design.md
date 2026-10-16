@@ -3,6 +3,7 @@
 **Date:** 2026-10-11
 **Status:** Draft for review
 **Project folder:** `~/Desktop/Nathan/Claude/NFL_DFS`
+**Later additions:** the 📒 My Results tab (entries, winnings, player history) is specified in `2026-10-16-my-results-design.md`; it also adds a publish to the Tuesday stage.
 **Pattern reference:** `~/Desktop/Nathan/Claude/MLB_Pipeline` (README.md, USER_MANUAL.md) — this project deliberately mirrors its local-pipeline + GitHub + Streamlit Community Cloud setup.
 
 ---

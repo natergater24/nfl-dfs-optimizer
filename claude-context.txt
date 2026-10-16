@@ -143,7 +143,18 @@ OUTSTANDING (modeling)
 - Unknown contest type stored as "" and shown "Type not set". typed_fields protects typed values from imports.
 - Display numbers are pre-formatted as strings: st.dataframe shows None for nulls despite Styler na_rep.
 - DST actual points come only from standings imports in v1.
+- Name clash: data/processed/player_weeks.parquet = nflverse weekly stats (model input); data/history/
+  player_weeks.parquet = per-slate player history (projected vs actual). Same file name, different data.
+- Final-review fix wave: slate_lineups/<date>_<dg>.parquet appends every build with built_at (dupes skipped);
+  entries.lineup_source groups by (built_at, contest_key, rank), prefers entry's type then latest build.
+  run_pipeline._optional wraps bookkeeping (contest list, player-history upsert, lineup archive after
+  write_published, nflverse actual-points fill) -> "; WARNING: <what> failed (<Exc>)" on the step; app.py shows any
+  step message containing WARNING. step_results: entry reading (_import_my_entries) and set_actuals fail soft.
+  STAGES["tuesday"] now ends with publish. Edit row: "" = "Type not set" option, blank fee/winnings stay None,
+  Save sends only changed fields (_changed). Season filter = config.season_for (Jan -> prior season). Flash with
+  ok=True and "WARNING" in the text renders st.warning. record_my_build swallows errors. 273 tests pass -W error.
 OUTSTANDING (My Results)
 - Verify the real standings Lineup/EntryName format with Nathan's first file (Sun Oct 18 Double Up).
 - Check the DK HISTORY page for an entry-history CSV; if present, plan an import for fees/winnings.
 - Finalize the sidebar import guide wording.
+- Parked: lineup picker for Add entry by hand; no lock between app edits and a pipeline run on entries.parquet.
