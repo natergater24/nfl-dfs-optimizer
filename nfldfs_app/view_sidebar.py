@@ -56,6 +56,9 @@ def render(d, hosted: bool) -> None:
         msg = results_message(d.results_status)
         if msg:
             st.caption(msg)
+        if not hosted and config.dk_username() is None:
+            st.info("To track your own entries in 📒 My Results, add a line `DK_USERNAME=your DraftKings "
+                    "username` to env.txt (see the user manual).")
         if hosted:
             st.caption("Importing results and uploading files work in the app on your Mac.")
         if st.button("Check for results", disabled=hosted, key="check_results", width="stretch"):

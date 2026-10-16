@@ -113,3 +113,31 @@ def make_app(monkeypatch):
         at.run()
         return at
     return _make
+
+
+@pytest.fixture(scope="session")
+def results_root(tmp_path_factory, published_dir):
+    """A data/ folder with published files plus a small entry and player history (sample values)."""
+    import shutil
+    import pandas as pd
+    from nfldfs import entries as ent, player_history as ph
+    root = tmp_path_factory.mktemp("data")
+    shutil.copytree(published_dir, root / "published")
+    pool = pd.read_parquet(published_dir / "player_pool.parquet")
+    rows = ph.slate_rows(pool, "2026-10-18")
+    ph.upsert_slate(root / "history" / "player_weeks.parquet", rows)
+    lus = pd.read_parquet(published_dir / "lineups.parquet")
+    ids = lus[(lus.contest_key == "double_up") & (lus["rank"] == 0)].dk_id.astype(int).tolist()
+    ph.set_actuals(root / "history" / "player_weeks.parquet", "2026-10-18",
+                   pd.DataFrame({"dk_id": ids, "actual_pts": [12.0] * 9, "actual_own": [20.0] * 9}))
+    e = pd.DataFrame([
+        {"entry_id": "9002", "contest_id": "555", "slate_date": "2026-10-18", "contest_name": "NFL GIANT $25 Double Up",
+         "contest_type": "double_up", "entry_fee": 25.0, "winnings": 50.0, "place": 412.0, "field_size": 2758.0,
+         "points": 108.0, "players": ",".join(map(str, ids)), "projected": 100.0,
+         "lineup_source": "Recommended Double Up", "typed_fields": "winnings"},
+        {"entry_id": "9003", "contest_id": "556", "slate_date": "2026-10-18", "contest_name": "NFL $20 Tournament",
+         "contest_type": "tournament", "entry_fee": 20.0, "winnings": float("nan"), "place": 1890.0,
+         "field_size": 11890.0, "points": 101.0, "players": ",".join(map(str, ids)), "projected": 100.0,
+         "lineup_source": "My Lineup build", "typed_fields": ""}])
+    ent.upsert_entries(root / "history" / "entries.parquet", e)
+    return root

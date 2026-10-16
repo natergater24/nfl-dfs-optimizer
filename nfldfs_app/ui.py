@@ -142,3 +142,15 @@ def report_card_widget(card: dict) -> None:
     st.caption(f"Latest slate {card.get('latest_slate')} · season to date ({card['weeks']} weeks): "
                f"{sea.get('proj_mae', '—')} pts error, {sea.get('in_range_pct', '—')}% in range, "
                f"ownership error {sea.get('own_mae', '—')}")
+
+
+def styled_player_history(table: pd.DataFrame):
+    view = table.drop(columns=["mu_color"])
+    return (view.style.apply(_matchup_css(table["mu_color"].tolist()), subset=["Matchup"])
+            .format({"Salary": "${:,.0f}", "Projected": "{:.1f}", "Actual": "{:.1f}", "+/−": "{:+.1f}",
+                     "Own est.": "{:.0f}%", "Own actual": "{:.0f}%"}, na_rep="—"))
+
+
+def signed_money(v) -> str:
+    v = float(v)
+    return f"{'+' if v >= 0 else '−'}${abs(v):,.0f}"

@@ -6,7 +6,7 @@ import streamlit as st
 
 from nfldfs.config import CONTEST_TYPES, GAME_STYLE, SALARY_CAP, SLATE_NAME
 from nfldfs.sim_eval import lineup_scores
-from nfldfs_app import actions, data, ui, view_builder, view_pool, view_recommended, view_sidebar
+from nfldfs_app import actions, data, ui, view_builder, view_pool, view_recommended, view_results, view_sidebar
 
 st.set_page_config(page_title="NFL DFS Lineups", page_icon="🏈", layout="wide")
 
@@ -80,10 +80,12 @@ if not hosted and top[3].button("⟳ Refresh data now", width="stretch", key="re
     st.rerun()
 
 view_sidebar.render(d, hosted)
-tab_rec, tab_mine, tab_pool = st.tabs(["⭐ Recommended", "🛠 My Lineup", "📋 Player pool"])
+tab_rec, tab_mine, tab_pool, tab_res = st.tabs(["⭐ Recommended", "🛠 My Lineup", "📋 Player pool", "📒 My Results"])
 with tab_rec:
     view_recommended.render(d, key, label, field_scores)
 with tab_mine:
     view_builder.render(d, key, label, field_scores)
 with tab_pool:
     view_pool.render(d, key, label, field_scores)
+with tab_res:
+    view_results.render(d, hosted)
