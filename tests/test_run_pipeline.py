@@ -290,3 +290,72 @@ def test_lock_is_released_after_a_run(tmp_path, monkeypatch):
     monkeypatch.setattr(run_pipeline, "STEP_FUNCS", {"a": lambda t, a: "fine"})
     assert run_pipeline.main(["--stage", "test", "--today", "2026-10-15"]) == 0
     _hold_lock().close()                                          # would raise BlockingIOError if still held
+
+
+def _standings_zip_with_me(path):
+    lineup = ("DST BBB DST1 FLEX AAA RB2 QB AAA QB1 RB AAA RB1 RB BBB RB1 TE AAA TE1 "
+              "WR AAA WR1 WR AAA WR2 WR BBB WR1")
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("contest-standings-555.csv",
+                   "Rank,EntryId,EntryName,TimeRemaining,Points,Lineup,,Player,Roster Position,%Drafted,FPTS\n"
+                   f"1,1,someoneelse,0,150,{lineup},,AAA QB1,QB,30.00%,22.0\n"
+                   f"2,2,natergater24,0,140,{lineup},,AAA WR1,WR,12.00%,18.0\n")
+    return path
+
+
+def test_results_import_creates_entries_without_usernames(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    _snapshot_file(tmp_path)
+    monkeypatch.setattr(config, "dk_username", lambda: "natergater24")
+    pd.DataFrame([{"contest_id": "555", "contest_name": "NFL GIANT $25 Double Up", "entry_fee": 25.0,
+                   "max_entries": 2758}]).to_parquet(tmp_path / "processed" / "contests.parquet", index=False)
+    z = _standings_zip_with_me(tmp_path / "Downloads" / "contest-standings-555.zip")
+    _monday(z)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "1 of your entries" in msg
+    e = pd.read_parquet(tmp_path / "history" / "entries.parquet")
+    assert len(e) == 1 and e.iloc[0]["contest_type"] == "double_up" and e.iloc[0]["entry_fee"] == 25.0
+    for folder in ("history", "published"):
+        for f in (tmp_path / folder).rglob("*"):
+            if f.is_file():
+                blob = f.read_bytes().lower()
+                assert b"natergater24" not in blob and b"someoneelse" not in blob, f
+
+
+def test_results_import_without_username_says_how_to_enable(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    _snapshot_file(tmp_path)
+    monkeypatch.setattr(config, "dk_username", lambda: None)
+    z = _standings_zip_with_me(tmp_path / "Downloads" / "contest-standings-555.zip")
+    _monday(z)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "DK_USERNAME" in msg and not (tmp_path / "history" / "entries.parquet").exists()
+
+
+def test_fill_nflverse_actuals(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    from nfldfs import player_history as ph
+    pool = make_pool()
+    pool["median"], pool["floor"], pool["ceiling"], pool["own_pct"] = 10.0, 5.0, 20.0, 8.0
+    ph.upsert_slate(tmp_path / "history" / "player_weeks.parquet", ph.slate_rows(pool, "2026-10-18"))
+    stats = pd.DataFrame({"name": ["AAA QB1"], "team": ["AAA"], "position": ["QB"], "season": [2026], "week": [7],
+                          "dk_pts": [21.5]})
+    wd = pd.DataFrame({"season": [2026], "week": [7], "gameday": ["2026-10-18"]})
+    assert run_pipeline.fill_nflverse_actuals(stats, wd) == 1
+    pw = ph.load(tmp_path / "history" / "player_weeks.parquet")
+    assert pw.loc[pw["name"] == "AAA QB1", "actual_pts"].iloc[0] == 21.5
+
+
+def test_salaries_step_saves_lobby_contests(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    from pathlib import Path as _P
+    csv_text = (_P(__file__).parent / "fixtures" / "dk_salaries_sample.csv").read_bytes().decode("utf-8")
+    lobby = {"DraftGroups": [{"DraftGroupId": 154941, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": 10,
+                              "StartDateEst": "2026-10-18T13:00:00.0000000", "DraftGroupTag": "Featured"}],
+             "Contests": [{"id": 777, "n": "NFL $5 Double Up", "a": 5, "m": 100, "dg": 154941}]}
+    monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_lobby", lambda: lobby)
+    monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_salary_csv", lambda slate: csv_text)
+    run_pipeline.step_salaries(dt.date(2026, 10, 12), SimpleNamespace(salary_csv=None))
+    c = pd.read_parquet(tmp_path / "processed" / "contests.parquet")
+    assert c.to_dict("records") == [{"contest_id": "777", "contest_name": "NFL $5 Double Up", "entry_fee": 5.0,
+                                     "max_entries": 100}]

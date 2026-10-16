@@ -26,7 +26,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from nfldfs import build, config, dk_salaries, nfl_stats, ownership, publish, results, team_env, vegas
+from nfldfs import (build, config, dk_salaries, entries, nfl_stats, ownership, player_history, publish, results,
+                    team_env, vegas)
 from nfldfs.build import write_published
 from nfldfs.status import RunStatus, atomic_write_parquet, atomic_write_text
 
@@ -43,15 +44,24 @@ def step_salaries(today, args) -> str:
         text = Path(args.salary_csv).read_text(encoding="utf-8-sig")
         slate = {"draft_group_id": None, "contest_type_id": None, "start": None, "source": "upload"}
     else:
-        slate = dk_salaries.find_main_slate(dk_salaries.fetch_lobby(), today)
+        lobby = dk_salaries.fetch_lobby()
+        slate = dk_salaries.find_main_slate(lobby, today)
         text = dk_salaries.fetch_salary_csv(slate)
         slate["source"] = "draftkings"
+        _save_contests(dk_salaries.lobby_contests(lobby, slate["draft_group_id"]))
     pool = dk_salaries.parse_salary_csv(text)
     slate.update(game_count=int(pool.game_id.nunique()), players=len(pool), fetched_at=_now())
     atomic_write_text(config.RAW / "dk_salaries.csv", text)
     atomic_write_parquet(pool, config.PROCESSED / "pool_base.parquet")
     atomic_write_text(config.PROCESSED / "slate.json", json.dumps(slate, indent=2))
     return f"{len(pool)} players, {slate['game_count']} games ({slate['source']})"
+
+
+def _save_contests(new: pd.DataFrame) -> None:
+    path = config.PROCESSED / "contests.parquet"
+    cur = pd.read_parquet(path) if path.exists() else new.iloc[0:0]
+    merged = pd.concat([cur, new], ignore_index=True).drop_duplicates("contest_id", keep="last")
+    atomic_write_parquet(merged.reset_index(drop=True), path)
 
 
 def _salaries_current(today) -> bool:
@@ -76,8 +86,30 @@ def step_stats(today, args) -> str:
     atomic_write_parquet(tw, config.PROCESSED / "team_weeks.parquet")
     atomic_write_parquet(sched_rows, config.PROCESSED / "schedule_rows.parquet")
     atomic_write_text(config.PROCESSED / "team_model.json", json.dumps(model, indent=2))
+    wd = player_history.week_dates(sched)
+    atomic_write_parquet(wd, config.PROCESSED / "week_dates.parquet")
+    filled = fill_nflverse_actuals(pw, wd)
     latest = pw[pw.season == pw.season.max()].week.max()
-    return f"{len(pw)} player-weeks through {pw.season.max()} week {latest}; model fit on {model['n_games']} team-games"
+    return (f"{len(pw)} player-weeks through {pw.season.max()} week {latest}; model fit on {model['n_games']} team-games"
+            f"; actual points filled for {filled} player-slates")
+
+
+def fill_nflverse_actuals(stats: pd.DataFrame, wd: pd.DataFrame) -> int:
+    """Fill actual DK points (offense) for every archived slate whose NFL week is in the stats."""
+    path = config.HISTORY / "player_weeks.parquet"
+    pw = player_history.load(path)
+    total = 0
+    for slate_date in sorted(pw["slate_date"].unique()):
+        week = player_history.week_for(wd, slate_date)
+        if week is None:
+            continue
+        stats_week = stats[(stats["season"] == week[0]) & (stats["week"] == week[1])]
+        if stats_week.empty:
+            continue
+        actuals = player_history.nflverse_actuals(pw[pw["slate_date"] == slate_date], stats_week)
+        if len(actuals):
+            total += player_history.set_actuals(path, slate_date, actuals)
+    return total
 
 
 def step_stats_if_missing(today, args) -> str:
@@ -142,7 +174,11 @@ def step_build(today, args) -> str:
         ownership_model=model)
     slate = json.loads((P / "slate.json").read_text())
     slate_date = str(pd.read_parquet(P / "pool_base.parquet", columns=["kickoff"]).kickoff.min().date())
-    atomic_write_parquet(res["pool"], config.SLATES / f"{slate_date}_{slate.get('draft_group_id') or 'upload'}.parquet")
+    dg_tag = slate.get("draft_group_id") or "upload"
+    atomic_write_parquet(res["pool"], config.SLATES / f"{slate_date}_{dg_tag}.parquet")
+    atomic_write_parquet(res["lineups"], P / "slate_lineups" / f"{slate_date}_{dg_tag}.parquet")
+    player_history.upsert_slate(config.HISTORY / "player_weeks.parquet",
+                                player_history.slate_rows(res["pool"], slate_date))
     odds = json.loads((P / "odds_meta.json").read_text()) if (P / "odds_meta.json").exists() else {}
     meta = {**slate, "built_at": _now(),
             "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "n_sims": config.N_SIMS, "match_rate": res["match_rate"],
@@ -170,7 +206,7 @@ def step_results(today, args) -> str:
     if not files:
         return "skipped: no new contest-standings file"
     done.mkdir(parents=True, exist_ok=True)
-    hist, slates, imported, skipped = None, [], [], []
+    hist, slates, imported, skipped, entry_notes = None, [], [], [], []
     for f in files:                           # one bad file must not block the others
         try:
             downloaded = dt.date.fromtimestamp(f.stat().st_mtime)
@@ -186,8 +222,32 @@ def step_results(today, args) -> str:
                                "(wrong contest?)")
                 _set_aside(f, done / "skipped")
                 continue
-            hist = results.append_history(config.HISTORY / "results.parquet",
-                                          results.match_to_slate(standings, snap_df, slate_date, dg))
+            matched = results.match_to_slate(standings, snap_df, slate_date, dg)
+            hist = results.append_history(config.HISTORY / "results.parquet", matched)
+            player_history.set_actuals(config.HISTORY / "player_weeks.parquet", slate_date,
+                                       matched[["dk_id", "actual_pts", "actual_own"]])
+            user = config.dk_username()
+            if user:
+                mine = entries.read_my_entries(results.standings_text(f), user)
+                if len(mine):
+                    lu_path = config.PROCESSED / "slate_lineups" / f"{slate_date}_{dg}.parquet"
+                    builds_path = config.PROCESSED / "my_builds.parquet"
+                    contests_path = config.PROCESSED / "contests.parquet"
+                    cid = entries.contest_id_from(f)
+                    contest = None
+                    if contests_path.exists():
+                        c = pd.read_parquet(contests_path)
+                        c = c[c["contest_id"].astype(str) == cid]
+                        contest = c.iloc[0].to_dict() if len(c) else None
+                    rows = entries.build_entry_rows(
+                        mine, snap_df, pd.read_parquet(lu_path) if lu_path.exists() else None,
+                        pd.read_parquet(builds_path) if builds_path.exists() else None, slate_date, cid, contest)
+                    entries.upsert_entries(config.HISTORY / "entries.parquet", rows)
+                    entry_notes.append(f"{len(rows)} of your entries")
+                else:
+                    entry_notes.append("no entries of yours in this contest")
+            else:
+                entry_notes.append("add DK_USERNAME to env.txt to track your entries")
             shutil.move(str(f), str(done / f.name))
             slates.append(slate_date)
             imported.append(f"{f.name} ({share:.0%} matched)")
@@ -204,6 +264,8 @@ def step_results(today, args) -> str:
             atomic_write_text(config.PROCESSED / "ownership_model.json", json.dumps(model, indent=2))
         msg += (f" for the {', '.join(sorted(set(slates)))} slate ({', '.join(imported)}); "
                 f"{card['weeks']} week(s) of results" + ("; ownership model updated" if model else ""))
+    if entry_notes:
+        msg += "; " + "; ".join(sorted(set(entry_notes)))
     if skipped:
         raise RuntimeError(f"{msg}; " + "; ".join(skipped))
     return msg
