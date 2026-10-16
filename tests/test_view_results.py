@@ -46,3 +46,18 @@ def test_tab_with_no_entries(make_app, published_dir):
     at = make_app(published_dir, hosted="1")
     assert not at.exception
     assert any("No entries yet" in i.value for i in at.info)
+
+
+def test_totals_follow_type_filter(make_app, results_root):
+    at = make_app(results_root / "published", hosted="1")
+    assert [m.value for m in at.metric if m.label == "Entries"] == ["2"]
+    at.selectbox(key="res_type").set_value("double_up").run()
+    assert not at.exception
+    assert [m.value for m in at.metric if m.label == "Entries"] == ["1"]
+
+
+def test_place_text_handles_missing_field_size():
+    nan = float("nan")
+    assert view_results._place_text(5.0, nan) == " \u00b7 place 5"
+    assert view_results._place_text(5.0, 100.0) == " \u00b7 5 of 100"
+    assert view_results._place_text(nan, nan) == ""

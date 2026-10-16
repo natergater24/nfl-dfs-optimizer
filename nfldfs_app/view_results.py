@@ -29,6 +29,14 @@ def _pct(v) -> str:
     return "—" if v is None else f"{v:.0%}"
 
 
+def _place_text(place, field_size) -> str:
+    if pd.isna(place):
+        return ""
+    if pd.isna(field_size):
+        return f" · place {int(place):,}"
+    return f" · {int(place):,} of {int(field_size):,}"
+
+
 def _totals(e: pd.DataFrame) -> None:
     s = ent.summary(e)
     c = st.columns(4)
@@ -109,7 +117,7 @@ def _entry(row, pw: pd.DataFrame, hosted: bool) -> None:
         money = ("Fee " + (ui.money(fee) if not pd.isna(fee) else "—") + " → "
                  + ("winnings not entered yet" if pd.isna(won) else f"Won {ui.money(won)} "
                     f"({ui.signed_money(won - (0 if pd.isna(fee) else fee))})"))
-        place = "" if pd.isna(row["place"]) else f" · {int(row['place']):,} of {int(row['field_size']):,}"
+        place = _place_text(row["place"], row["field_size"])
         score = ("" if pd.isna(row["points"]) else f" · Actual {row['points']:.1f}"
                  + ("" if pd.isna(row["projected"]) else
                     f" vs projected {row['projected']:.1f} ({row['points'] - row['projected']:+.1f})"))
@@ -142,7 +150,8 @@ def render(d, hosted: bool) -> None:
         st.info("No entries yet. After a contest ends, export its standings from DraftKings (📥 in the sidebar) "
                 "and your entries appear here." + ("" if hosted else " You can also add one by hand below."))
     season = st.session_state.get("res_season", seasons[0])
-    _totals(filter_entries(e, season, "all", "All lineups") if len(e) else e)
+    _totals(filter_entries(e, season, st.session_state.get("res_type", "all"),
+                           st.session_state.get("res_source", SOURCES[0])) if len(e) else e)
     c = st.columns([1, 2, 2, 2], vertical_alignment="bottom")
     season = c[0].selectbox("Season", seasons, key="res_season")
     type_keys = ["all"] + list(CONTEST_TYPES)
