@@ -87,3 +87,14 @@ def parse_salary_csv(text: str) -> pd.DataFrame:
     out["playable"] = out["status"].isin(PLAYABLE_STATUSES)
     return out[["dk_id", "name", "position", "salary", "team", "opp", "game_id",
                 "is_home", "kickoff", "dk_avg", "status", "playable"]]
+
+
+CONTEST_COLUMNS = ["contest_id", "contest_name", "entry_fee", "max_entries"]
+
+
+def lobby_contests(lobby: dict, draft_group_id) -> pd.DataFrame:
+    """Contests on one draft group, from the lobby JSON (names and entry fees for the results tracker)."""
+    rows = [{"contest_id": str(c["id"]), "contest_name": str(c.get("n", "")),
+             "entry_fee": float(c.get("a") or 0), "max_entries": int(c.get("m") or 0)}
+            for c in lobby.get("Contests", []) if str(c.get("dg")) == str(draft_group_id)]
+    return pd.DataFrame(rows, columns=CONTEST_COLUMNS)

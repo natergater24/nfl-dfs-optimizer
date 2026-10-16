@@ -34,17 +34,19 @@ def find_new_standings(downloads, done_dir) -> list[Path]:
     return sorted(found, key=lambda p: p.stat().st_mtime)
 
 
-def read_standings(path) -> pd.DataFrame:
+def standings_text(path) -> str:
     path = Path(path)
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as z:
             members = [n for n in z.namelist() if n.lower().endswith(".csv")]
             if not members:
                 raise ValueError(f"{path.name} has no CSV inside — is it a DraftKings contest standings export?")
-            text = z.read(members[0]).decode("utf-8-sig")
-    else:
-        text = path.read_text(encoding="utf-8-sig")
-    df = pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False)
+            return z.read(members[0]).decode("utf-8-sig")
+    return path.read_text(encoding="utf-8-sig")
+
+
+def read_standings(path) -> pd.DataFrame:
+    df = pd.read_csv(io.StringIO(standings_text(path)), dtype=str, keep_default_na=False)
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"This doesn't look like a DraftKings contest standings export "

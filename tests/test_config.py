@@ -28,3 +28,12 @@ def test_season_for_rolls_over_in_september():
     assert config.season_for(dt.date(2026, 10, 12)) == 2026
     assert config.season_for(dt.date(2027, 1, 3)) == 2026
     assert config.season_for(dt.date(2026, 9, 1)) == 2026
+
+
+def test_dk_username_from_env(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.delenv("DK_USERNAME", raising=False)
+    assert config.dk_username() is None
+    (tmp_path / "env.txt").write_text("DK_USERNAME= someone \n")
+    assert config.dk_username() == "someone"
+    monkeypatch.delenv("DK_USERNAME", raising=False)

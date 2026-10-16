@@ -76,3 +76,10 @@ def odds_api_key() -> str:
     if not key:
         raise RuntimeError("ODDS_API_KEY is not set — add it to env.txt (see env.txt.example)")
     return key
+
+
+def dk_username() -> str | None:
+    """Nathan's DraftKings username, read only from env.txt (never stored or published)."""
+    load_dotenv(ROOT / "env.txt")
+    value = os.getenv("DK_USERNAME", "").strip()
+    return value or None

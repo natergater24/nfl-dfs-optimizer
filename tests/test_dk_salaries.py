@@ -98,3 +98,14 @@ def test_fetch_lobby_non_json_gives_plain_guidance():
     with pytest.raises(RuntimeError, match="--salary-csv PATH") as e:
         dk_salaries.fetch_lobby(S())
     assert e.value.__suppress_context__ is True
+
+
+def test_lobby_contests_filters_by_draft_group():
+    lobby = {"Contests": [
+        {"id": 196653900, "n": "NFL $2.75M Fantasy Football Millionaire", "a": 20, "m": 161764, "dg": 154941},
+        {"id": 1, "n": "NFL Showdown", "a": 5, "m": 100, "dg": 999}]}
+    c = dk_salaries.lobby_contests(lobby, 154941)
+    assert list(c.columns) == ["contest_id", "contest_name", "entry_fee", "max_entries"]
+    assert c.to_dict("records") == [{"contest_id": "196653900", "contest_name": "NFL $2.75M Fantasy Football Millionaire",
+                                     "entry_fee": 20.0, "max_entries": 161764}]
+    assert dk_salaries.lobby_contests({}, 1).empty
