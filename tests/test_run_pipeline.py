@@ -359,3 +359,132 @@ def test_salaries_step_saves_lobby_contests(tmp_path, monkeypatch):
     c = pd.read_parquet(tmp_path / "processed" / "contests.parquet")
     assert c.to_dict("records") == [{"contest_id": "777", "contest_name": "NFL $5 Double Up", "entry_fee": 5.0,
                                      "max_entries": 100}]
+
+
+def test_tuesday_publishes_after_stats():
+    steps = run_pipeline.STAGES["tuesday"]
+    assert "publish" in steps and steps.index("publish") > steps.index("stats")
+
+
+def _boom(*a, **k):
+    raise RuntimeError("disk full")
+
+
+def test_salaries_step_warns_when_saving_contests_fails(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    from pathlib import Path as _P
+    csv_text = (_P(__file__).parent / "fixtures" / "dk_salaries_sample.csv").read_bytes().decode("utf-8")
+    lobby = {"DraftGroups": [{"DraftGroupId": 154941, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": 10,
+                              "StartDateEst": "2026-10-18T13:00:00.0000000", "DraftGroupTag": "Featured"}],
+             "Contests": []}
+    monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_lobby", lambda: lobby)
+    monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_salary_csv", lambda slate: csv_text)
+    monkeypatch.setattr(run_pipeline, "_save_contests", _boom)
+    msg = run_pipeline.step_salaries(dt.date(2026, 10, 12), SimpleNamespace(salary_csv=None))
+    assert "; WARNING: saving the contest list failed (RuntimeError)" in msg
+    assert (tmp_path / "processed" / "pool_base.parquet").exists()
+
+
+def test_save_contests_skips_empty(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    empty = pd.DataFrame(columns=["contest_id", "contest_name", "entry_fee", "max_entries"])
+    run_pipeline._save_contests(empty)
+    assert not (tmp_path / "processed" / "contests.parquet").exists()
+    one = pd.DataFrame([{"contest_id": "1", "contest_name": "x", "entry_fee": 5.0, "max_entries": 10}])
+    run_pipeline._save_contests(one)
+    run_pipeline._save_contests(empty)
+    run_pipeline._save_contests(one.assign(entry_fee=6.0))
+    assert pd.read_parquet(tmp_path / "processed" / "contests.parquet").to_dict("records") == \
+        [{"contest_id": "1", "contest_name": "x", "entry_fee": 6.0, "max_entries": 10}]
+
+
+def _fake_build(tmp_path, monkeypatch, lineups):
+    _paths(tmp_path, monkeypatch)
+    P = tmp_path / "processed"
+    pool = make_pool()
+    pool["median"], pool["floor"], pool["ceiling"], pool["own_pct"] = 10.0, 5.0, 20.0, 8.0
+    pool.to_parquet(P / "pool_base.parquet", index=False)
+    for f in ("player_weeks", "team_weeks", "vegas_games"):
+        pd.DataFrame({"x": [1]}).to_parquet(P / f"{f}.parquet", index=False)
+    (P / "team_model.json").write_text("{}")
+    (P / "slate.json").write_text(json.dumps({"draft_group_id": 154941}))
+    res = {"pool": pool, "lineups": lineups, "match_rate": 1.0, "unmatched": []}
+    monkeypatch.setattr(run_pipeline.build, "build_slate", lambda *a, **k: res)
+    published = []
+    monkeypatch.setattr(run_pipeline, "write_published", lambda r, out, meta: published.append(meta))
+    return published
+
+
+def _lineup_rows(ids, key="h2h", rank=0):
+    return pd.DataFrame({"contest_key": [key] * len(ids), "rank": [rank] * len(ids), "dk_id": ids})
+
+
+@pytest.mark.parametrize("target,attr,what", [
+    (run_pipeline.player_history, "upsert_slate", "saving player history"),
+    (run_pipeline, "_archive_lineups", "archiving lineups")])
+def test_build_step_warns_when_history_bookkeeping_fails(tmp_path, monkeypatch, target, attr, what):
+    published = _fake_build(tmp_path, monkeypatch, _lineup_rows(list(range(1001, 1010))))
+    monkeypatch.setattr(target, attr, _boom)
+    msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    assert f"; WARNING: {what} failed (RuntimeError)" in msg and published
+
+
+def test_build_archives_every_build_so_earlier_lineups_still_match(tmp_path, monkeypatch):
+    from nfldfs import entries
+    first, second = list(range(1001, 1010)), list(range(1002, 1011))
+    times = iter(["2026-10-15T08:00:00", "2026-10-18T09:00:00", "2026-10-18T11:45:00"])
+    _fake_build(tmp_path, monkeypatch, _lineup_rows(first))
+    monkeypatch.setattr(run_pipeline, "_now", lambda: next(times))
+    run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    res2 = {"pool": pd.read_parquet(tmp_path / "processed" / "pool_base.parquet"), "lineups": _lineup_rows(second),
+            "match_rate": 1.0, "unmatched": []}
+    monkeypatch.setattr(run_pipeline.build, "build_slate", lambda *a, **k: res2)
+    run_pipeline.step_build(dt.date(2026, 10, 18), SimpleNamespace())
+    run_pipeline.step_build(dt.date(2026, 10, 18), SimpleNamespace())           # identical rebuild adds nothing
+    lus = pd.read_parquet(tmp_path / "processed" / "slate_lineups" / "2026-10-18_154941.parquet")
+    assert "built_at" in lus.columns and len(lus) == 18
+    assert entries.lineup_source(first, lus, prefer="h2h") == "Recommended Head-to-Head"
+    assert entries.lineup_source(second, lus, prefer="h2h") == "Recommended Head-to-Head"
+
+
+def test_stats_step_warns_when_actuals_fill_fails(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    pw = pd.DataFrame({"season": [2026], "week": [6]})
+    monkeypatch.setattr(run_pipeline.nfl_stats, "load_raw", lambda seasons: (pw, pd.DataFrame({"x": [1]})))
+    monkeypatch.setattr(run_pipeline.nfl_stats, "normalize_player_stats", lambda raw: pw)
+    monkeypatch.setattr(run_pipeline.nfl_stats, "team_week_totals", lambda p: pw)
+    monkeypatch.setattr(run_pipeline.nfl_stats, "normalize_schedules", lambda s: pw)
+    monkeypatch.setattr(run_pipeline.team_env, "build_training_frame", lambda tw, s: None)
+    monkeypatch.setattr(run_pipeline.team_env, "fit_team_model", lambda f: {"n_games": 1})
+    monkeypatch.setattr(run_pipeline.player_history, "week_dates", lambda s: pw)
+    monkeypatch.setattr(run_pipeline, "fill_nflverse_actuals", _boom)
+    msg = run_pipeline.step_stats(dt.date(2026, 10, 13), SimpleNamespace())
+    assert msg.startswith("1 player-weeks") and "; WARNING: filling actual points failed (RuntimeError)" in msg
+    assert (tmp_path / "processed" / "team_model.json").exists()
+
+
+def test_results_entries_failure_still_imports_file(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    _snapshot_file(tmp_path)
+    monkeypatch.setattr(config, "dk_username", lambda: "natergater24")
+    def bad(text, user):
+        raise ValueError("odd columns")
+    monkeypatch.setattr(run_pipeline.entries, "read_my_entries", bad)
+    z = _standings_zip_with_me(tmp_path / "Downloads" / "contest-standings-555.zip")
+    _monday(z)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "imported 1 file(s)" in msg and "entries not read (ValueError)" in msg
+    assert not z.exists() and (tmp_path / "raw" / "standings" / z.name).exists()
+    assert "odd columns" not in msg
+
+
+def test_results_set_actuals_failure_is_a_warning(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    _snapshot_file(tmp_path)
+    monkeypatch.setattr(config, "dk_username", lambda: None)
+    monkeypatch.setattr(run_pipeline.player_history, "set_actuals", _boom)
+    z = _standings_zip(tmp_path / "Downloads" / "contest-standings-1.zip")
+    _monday(z)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "imported 1 file(s)" in msg and "WARNING: actual points not saved to player history (RuntimeError)" in msg
+    assert (tmp_path / "raw" / "standings" / z.name).exists()

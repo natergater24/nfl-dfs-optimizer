@@ -107,9 +107,14 @@ def lineup_source(ids, slate_lineups, my_builds=None, prefer: str = "") -> str:
         return "Not from the app"
     target = frozenset(int(i) for i in ids)
     if slate_lineups is not None and len(slate_lineups):
-        groups = list(slate_lineups.groupby(["contest_key", "rank"], sort=False))
-        groups.sort(key=lambda g: (g[0][0] != prefer, int(g[0][1])))
-        for (key, rank), g in groups:
+        # The archive holds every build of the slate (built_at); older archives hold one build without it.
+        lus = slate_lineups if "built_at" in slate_lineups.columns else slate_lineups.assign(built_at="")
+        groups = list(lus.assign(built_at=lus["built_at"].fillna("").astype(str))
+                      .groupby(["built_at", "contest_key", "rank"], sort=False))
+        groups.sort(key=lambda g: int(g[0][2]))
+        groups.sort(key=lambda g: g[0][0], reverse=True)          # latest build first
+        groups.sort(key=lambda g: g[0][1] != prefer)              # the entry's own contest type first
+        for (_, key, rank), g in groups:
             if frozenset(int(x) for x in g["dk_id"]) == target:
                 label = CONTEST_TYPES.get(key, {}).get("label", key)
                 return f"Recommended {label}" if int(rank) == 0 else f"Alternate #{int(rank) + 1} · {label}"

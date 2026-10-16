@@ -8,15 +8,23 @@ import streamlit as st
 
 from nfldfs import entries as ent
 from nfldfs import player_history as ph
-from nfldfs.config import CONTEST_TYPES
+from nfldfs.config import CONTEST_TYPES, season_for
 from nfldfs_app import actions, ui
 
 POS_ORDER = ("QB", "RB", "WR", "TE", "DST")
 SOURCES = ("All lineups", "App lineups", "My builds")
 
 
+def season_of(slate_date) -> str:
+    """NFL season of a slate date (weeks 17-18 in January belong to the previous year's season)."""
+    try:
+        return str(season_for(dt.date.fromisoformat(str(slate_date)[:10])))
+    except ValueError:
+        return str(slate_date)[:4]
+
+
 def filter_entries(e: pd.DataFrame, season: str, type_key: str, source: str) -> pd.DataFrame:
-    out = e[e["slate_date"].astype(str).str[:4] == str(season)]
+    out = e[e["slate_date"].map(season_of) == str(season)]
     if type_key != "all":
         out = out[out["contest_type"] == type_key]
     if source == "App lineups":
@@ -123,7 +131,7 @@ def _entry(row, pw: pd.DataFrame, hosted: bool) -> None:
     won, fee = row["winnings"], row["entry_fee"]
     icon = "💲" if pd.isna(won) else ("✅" if won > 0 else "✗")
     name = row["contest_name"] or f"Contest {row['contest_id'] or ''}".strip()
-    with st.expander(f"{icon} {row['slate_date']} · {name} · Classic · {ent.type_label(row['contest_type'])}"):
+    with st.expander(_md(f"{icon} {row['slate_date']} · {name} · Classic · {ent.type_label(row['contest_type'])}")):
         money = ("Fee " + (ui.money(fee) if not pd.isna(fee) else "—") + " → "
                  + ("winnings not entered yet" if pd.isna(won) else f"Won {ui.money(won)} "
                     f"({ui.signed_money(won - (0 if pd.isna(fee) else fee))})"))
@@ -137,25 +145,37 @@ def _entry(row, pw: pd.DataFrame, hosted: bool) -> None:
         if hosted:
             st.caption("Edit on your Mac.")
             return
-        eid = row["entry_id"]
+        eid, cur_type = row["entry_id"], row["contest_type"]
         c = st.columns(4)
         new_fee = c[0].number_input("Entry fee ($)", min_value=0.0, step=1.0, key=f"fee_{eid}",
-                                    value=0.0 if pd.isna(fee) else float(fee))
+                                    value=None if pd.isna(fee) else float(fee))
         new_won = c[1].number_input("Winnings ($)", min_value=0.0, step=1.0, key=f"win_{eid}",
-                                    value=0.0 if pd.isna(won) else float(won))
-        keys = list(CONTEST_TYPES)
+                                    value=None if pd.isna(won) else float(won))
+        keys = [""] + list(CONTEST_TYPES) + ([cur_type] if cur_type and cur_type not in CONTEST_TYPES else [])
         new_type = c[2].selectbox("Contest type", keys, format_func=ent.type_label, key=f"type_{eid}",
-                                  index=keys.index(row["contest_type"]) if row["contest_type"] in keys else 0)
+                                  index=keys.index(cur_type))
         c[3].write("")
         if c[3].button("Save", key=f"save_{eid}"):
-            st.session_state.flash = actions.save_entry_edit(eid, entry_fee=float(new_fee), winnings=float(new_won),
-                                                             contest_type=new_type)
+            changed = _changed(fee, won, cur_type, new_fee, new_won, new_type)
+            st.session_state.flash = (actions.save_entry_edit(eid, **changed) if changed
+                                      else (True, "Nothing changed."))
             st.rerun()
+
+
+def _changed(fee, won, cur_type, new_fee, new_won, new_type) -> dict:
+    """Only the fields the user actually changed, so untouched blanks stay blank (and aren't marked typed)."""
+    out = {}
+    for k, old, new in (("entry_fee", fee, new_fee), ("winnings", won, new_won)):
+        if new is not None and (pd.isna(old) or float(new) != float(old)):
+            out[k] = float(new)
+    if new_type != cur_type:
+        out["contest_type"] = new_type
+    return out
 
 
 def render(d, hosted: bool) -> None:
     e, pw = d.entries, d.player_weeks
-    seasons = sorted({str(s)[:4] for s in e["slate_date"]} | {str(dt.date.today().year)}, reverse=True)
+    seasons = sorted({season_of(s) for s in e["slate_date"]} | {str(season_for(dt.date.today()))}, reverse=True)
     if e.empty:
         st.info("No entries yet. After a contest ends, export its standings from DraftKings (📥 in the sidebar) "
                 "and your entries appear here." + ("" if hosted else " You can also add one by hand below."))

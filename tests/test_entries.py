@@ -150,3 +150,16 @@ def test_add_manual_entry_and_summary(tmp_path):
     assert by["double_up"]["label"] == "Double Up" and by["double_up"]["profit"] == 5.0
     empty = ent.summary(ent.empty_entries())
     assert empty["entries"] == 0 and empty["cash_rate"] is None and empty["roi"] is None
+
+
+def test_lineup_source_matches_any_build_preferring_latest():
+    p = _pool()
+    ids = _ids(p, A_NAMES)
+    other = ids[:-1] + _ids(p, ["CCC WR1"])
+    rows = [{"built_at": "2026-10-15T08:00:00", "contest_key": "h2h", "rank": 0, "dk_id": i} for i in ids]
+    rows += [{"built_at": "2026-10-18T09:00:00", "contest_key": "h2h", "rank": 0, "dk_id": i} for i in other]
+    lus = pd.DataFrame(rows)
+    assert ent.lineup_source(ids, lus, prefer="h2h") == "Recommended Head-to-Head"      # from the first build
+    later = pd.DataFrame(rows + [{"built_at": "2026-10-18T11:45:00", "contest_key": "h2h", "rank": 1, "dk_id": i}
+                                 for i in ids])
+    assert ent.lineup_source(ids, later, prefer="h2h") == "Alternate #2 · Head-to-Head"  # latest build wins

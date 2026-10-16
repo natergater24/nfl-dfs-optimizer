@@ -64,3 +64,10 @@ def test_save_entry_edit_and_add_entry(tmp_path, monkeypatch):
     assert ok and entries.load_entries(tmp_path / "history" / "entries.parquet").winnings.iloc[0] == 0.0
     ok, msg = actions.save_entry_edit("nope", winnings=1.0)
     assert not ok and "Couldn't save" in msg
+
+
+def test_record_my_build_never_raises(tmp_path):
+    path = tmp_path / "my_builds.parquet"
+    path.write_bytes(b"not a parquet file")
+    actions.record_my_build([1, 2, 3], "2026-10-18", path=path)       # bookkeeping failure must not break download
+    assert path.read_bytes() == b"not a parquet file"

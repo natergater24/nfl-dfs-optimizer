@@ -1,6 +1,7 @@
 """Local-only actions: run pipeline stages from the app and save uploaded files."""
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -37,7 +38,15 @@ def save_upload(uploaded, folder: Path) -> Path:
 
 
 def record_my_build(ids, slate_date, path=None) -> None:
-    """Remember a My Lineup download (Mac only) so a matching DraftKings entry is labeled 'My Lineup build'."""
+    """Remember a My Lineup download (Mac only) so a matching DraftKings entry is labeled 'My Lineup build'.
+    Bookkeeping only: a failure here is logged and never breaks the download."""
+    try:
+        _record_my_build(ids, slate_date, path)
+    except Exception:
+        logging.getLogger(__name__).exception("couldn't record My Lineup build")
+
+
+def _record_my_build(ids, slate_date, path) -> None:
     import datetime as dt
 
     import pandas as pd

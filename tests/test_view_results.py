@@ -79,3 +79,51 @@ def test_display_numbers_uses_dash_for_missing():
     assert row["Actual"] == row["+/\u2212"] == row["Own actual"] == "\u2014"
     styled = ui.styled_player_history(t)
     assert "None" not in styled.data.to_string() and "nan" not in styled.data.to_string().lower()
+
+
+def _root_with_blank_entry(results_root, tmp_path):
+    import shutil
+    from nfldfs import entries as ent
+    root = tmp_path / "data"
+    shutil.copytree(results_root, root)
+    ent.upsert_entries(root / "history" / "entries.parquet", pd.DataFrame([
+        {"entry_id": "9004", "contest_id": "557", "slate_date": "2026-10-18", "contest_name": "NFL $5 Showdown $1K",
+         "contest_type": "", "entry_fee": float("nan"), "winnings": float("nan"), "place": 3.0, "field_size": 500.0,
+         "points": 90.0, "players": "", "projected": float("nan"), "lineup_source": "Not from the app",
+         "typed_fields": ""}]))
+    return root
+
+
+def test_edit_blank_type_and_fee_sends_only_changed_fields(make_app, results_root, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(actions, "save_entry_edit", lambda entry_id, **f: calls.append((entry_id, f)) or (True, "Saved."))
+    at = make_app(_root_with_blank_entry(results_root, tmp_path) / "published", hosted="0")
+    assert not at.exception
+    assert at.selectbox(key="type_9004").value == ""
+    assert at.number_input(key="fee_9004").value is None
+    at.number_input(key="win_9004").set_value(30.0)
+    at.button(key="save_9004").click().run()
+    assert calls == [("9004", {"winnings": 30.0})]
+
+
+def test_entry_label_escapes_dollars(make_app, results_root, tmp_path):
+    at = make_app(_root_with_blank_entry(results_root, tmp_path) / "published", hosted="1")
+    labels = [x.label for x in at.expander if "Showdown" in x.label]
+    assert labels and "\\$5" in labels[0] and "\\$1K" in labels[0]
+
+
+def test_save_with_failed_publish_shows_warning(make_app, results_root, monkeypatch):
+    monkeypatch.setattr(actions, "save_entry_edit",
+                        lambda entry_id, **f: (True, "Saved. WARNING: push to GitHub failed — offline"))
+    at = make_app(results_root / "published", hosted="0")
+    at.number_input(key="win_9003").set_value(30.0)
+    at.button(key="save_9003").click().run()
+    assert any("push to GitHub failed" in w.value for w in at.warning)
+    assert not any("push to GitHub failed" in s.value for s in at.success)
+
+
+def test_filter_entries_uses_nfl_season():
+    e = pd.DataFrame({"entry_id": ["a", "b"], "slate_date": ["2027-01-03", "2027-09-12"],
+                      "contest_type": ["h2h", "h2h"], "lineup_source": ["", ""]})
+    assert list(view_results.filter_entries(e, "2026", "all", "All lineups").entry_id) == ["a"]
+    assert list(view_results.filter_entries(e, "2027", "all", "All lineups").entry_id) == ["b"]

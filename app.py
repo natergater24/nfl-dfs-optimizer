@@ -32,7 +32,7 @@ if st.session_state.pop("get_latest_pending", False):          # set by "Get lat
                               + (ui.format_refresh(refreshed_at) if refreshed_at else "(time unknown)"))
 flash = st.session_state.pop("flash", None)
 if flash:                                        # (ok, headline) or (ok, headline, log tail)
-    (st.success if flash[0] else st.error)(flash[1])
+    (st.error if not flash[0] else st.warning if "WARNING" in flash[1] else st.success)(flash[1])
     if len(flash) > 2 and flash[2]:
         st.code(flash[2])
 if hosted:
@@ -43,7 +43,7 @@ if failed:
     st.error(f"⚠ The last {d.run_status.get('stage', '')} run failed at "
              f"**{ui.step_label(failed[0].get('name', 'a step'))}**: {failed[0].get('message', '')}")
 for step in d.run_status.get("steps", []):
-    if str(step.get("message", "")).startswith("WARNING"):
+    if "WARNING" in str(step.get("message", "")):          # whole-step warnings and "; WARNING: …" notes
         st.warning(f"⚠ {ui.step_label(step.get('name', ''))}: {step['message']}")
 if not hosted and str(d.run_status.get("publish", "")).startswith("WARNING"):
     st.warning(f"The phone copy may be out of date: {d.run_status['publish']}")
