@@ -74,3 +74,15 @@ def test_search_with_entries():
     assert len(mine) == 1
     s, t = ph.search(pw, entries, "Nobody")
     assert s["slates"] == 0 and t.empty
+
+
+def test_search_two_entries_same_slate_and_float_columns():
+    pw = ph.slate_rows(_pool(), "2026-10-18")
+    qb = int(pw.loc[pw["name"] == "AAA QB1", "dk_id"].iloc[0])
+    entries = pd.DataFrame({"entry_id": ["1", "2"], "slate_date": ["2026-10-18"] * 2,
+                            "contest_name": ["A", "B"], "players": [str(qb)] * 2,
+                            "entry_fee": [25.0, 5.0], "winnings": [50.0, 0.0]})
+    summary, table = ph.search(pw, entries, "AAA QB1")
+    assert summary["times_played"] == 2
+    assert table.iloc[0]["My entry"] == "A \u00b7 \u2705 +$25; B \u00b7 \u2717 \u2212$5"
+    assert str(table["Actual"].dtype) == "float64"

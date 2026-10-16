@@ -61,3 +61,7 @@ def test_place_text_handles_missing_field_size():
     assert view_results._place_text(5.0, nan) == " \u00b7 place 5"
     assert view_results._place_text(5.0, 100.0) == " \u00b7 5 of 100"
     assert view_results._place_text(nan, nan) == ""
+
+
+def test_md_escapes_dollars_and_box_score_order(results_root):
+    assert view_results._md("Fees $40 \u00b7 Won $60") == "Fees \\$40 \u00b7 Won \\$60"

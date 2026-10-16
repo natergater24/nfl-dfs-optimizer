@@ -119,17 +119,19 @@ def search(pw: pd.DataFrame, entries: pd.DataFrame, name: str, mine_only: bool =
     for e in (entries.to_dict("records") if entries is not None and len(entries) else []):
         for pid in str(e.get("players") or "").split(","):
             if pid:
-                played.setdefault((str(e["slate_date"]), int(pid)), _entry_label(e))
+                played.setdefault((str(e["slate_date"]), int(pid)), []).append(_entry_label(e))
     table = pd.DataFrame([{
         "Slate": r.slate_date, "Matchup": f"vs {r.opp} · {r.mu_label}", "Salary": r.salary, "Projected": r.median,
         "Actual": r.actual_pts, "+/−": (r.actual_pts - r.median) if not pd.isna(r.actual_pts) else np.nan,
         "Own est.": r.own_pct, "Own actual": r.actual_own,
-        "My entry": played.get((r.slate_date, int(r.dk_id)), "—"), "mu_color": r.mu_color}
+        "My entry": "; ".join(played.get((r.slate_date, int(r.dk_id)), [])) or "—", "mu_color": r.mu_color}
         for r in rows.itertuples(index=False)], columns=TABLE_COLUMNS)
     summary = {"slates": int(len(rows)),
                "avg_projected": float(rows["median"].mean()) if len(rows) else None,
                "avg_actual": float(rows["actual_pts"].mean()) if rows["actual_pts"].notna().any() else None,
-               "times_played": int((table["My entry"] != "—").sum()) if len(table) else 0}
+               "times_played": sum(len(played.get((r.slate_date, int(r.dk_id)), [])) for r in rows.itertuples(index=False))}
+    for col in ("Salary", "Projected", "Actual", "+/−", "Own est.", "Own actual"):
+        table[col] = pd.to_numeric(table[col], errors="coerce").astype(float)
     if mine_only:
         table = table[table["My entry"] != "—"].reset_index(drop=True)
     return summary, table

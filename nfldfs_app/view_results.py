@@ -11,6 +11,7 @@ from nfldfs import player_history as ph
 from nfldfs.config import CONTEST_TYPES
 from nfldfs_app import actions, ui
 
+POS_ORDER = ("QB", "RB", "WR", "TE", "DST")
 SOURCES = ("All lineups", "App lineups", "My builds")
 
 
@@ -27,6 +28,11 @@ def filter_entries(e: pd.DataFrame, season: str, type_key: str, source: str) -> 
 
 def _pct(v) -> str:
     return "—" if v is None else f"{v:.0%}"
+
+
+def _md(text: str) -> str:
+    """Escape $ so Streamlit doesn't render money as LaTeX."""
+    return text.replace("$", "\\$")
 
 
 def _place_text(place, field_size) -> str:
@@ -47,10 +53,12 @@ def _totals(e: pd.DataFrame) -> None:
     c[3].metric("Avg score vs projected",
                 "—" if s["avg_points"] is None else f"{s['avg_points']:.1f}",
                 None if s["avg_vs_projected"] is None else f"{s['avg_vs_projected']:+.1f}")
-    st.caption(f"Fees {ui.money(s['fees'])} · Winnings {ui.money(s['winnings'])}"
-               + (f" · 💲 {s['waiting']} waiting on winnings" if s["waiting"] else ""))
+    st.caption(_md(f"Fees {ui.money(s['fees'])} · Winnings {ui.money(s['winnings'])}"
+                   + (f" · 💲 {s['waiting']} waiting on winnings" if s["waiting"] else "")))
     for t in ent.summary_by_type(e):
-        st.caption(f"**{t['label']}**: {t['entries']} entries · {t['cashed']} cashed · {ui.signed_money(t['profit'])}")
+        n = t["entries"]
+        st.caption(_md(f"**{t['label']}**: {n} {'entry' if n == 1 else 'entries'} · {t['cashed']} cashed · "
+                       f"{ui.signed_money(t['profit'])}"))
 
 
 def _add_form() -> None:
@@ -100,10 +108,14 @@ def _box_score(row, pw: pd.DataFrame) -> None:
     if week.empty:
         st.caption("Player details appear once this slate's history is available.")
         return
+    week = week.assign(_o=week["position"].map({p: i for i, p in enumerate(POS_ORDER)}).fillna(len(POS_ORDER)))
+    week = week.sort_values(["_o", "salary"], ascending=[True, False])
     t = pd.DataFrame({"Pos": week["position"], "Player": week["name"], "Team": week["team"],
                       "Salary": week["salary"], "Projected": week["median"], "Actual": week["actual_pts"],
                       "+/−": week["actual_pts"] - week["median"], "Own est.": week["own_pct"],
                       "Own actual": week["actual_own"]})
+    num = ["Salary", "Projected", "Actual", "+/−", "Own est.", "Own actual"]
+    t[num] = t[num].apply(pd.to_numeric, errors="coerce").astype(float)
     st.dataframe(t.style.format({"Salary": "${:,.0f}", "Projected": "{:.1f}", "Actual": "{:.1f}", "+/−": "{:+.1f}",
                                  "Own est.": "{:.0f}%", "Own actual": "{:.0f}%"}, na_rep="—"),
                  hide_index=True, width="stretch")
@@ -121,7 +133,7 @@ def _entry(row, pw: pd.DataFrame, hosted: bool) -> None:
         score = ("" if pd.isna(row["points"]) else f" · Actual {row['points']:.1f}"
                  + ("" if pd.isna(row["projected"]) else
                     f" vs projected {row['projected']:.1f} ({row['points'] - row['projected']:+.1f})"))
-        st.markdown(money.replace("$", "\\$") + place + score)
+        st.markdown(_md(money + place + score))
         st.caption(f"Lineup: {row['lineup_source']}")
         _box_score(row, pw)
         if hosted:
