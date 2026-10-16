@@ -65,3 +65,17 @@ def test_place_text_handles_missing_field_size():
 
 def test_md_escapes_dollars_and_box_score_order(results_root):
     assert view_results._md("Fees $40 \u00b7 Won $60") == "Fees \\$40 \u00b7 Won \\$60"
+
+
+def test_display_numbers_uses_dash_for_missing():
+    import numpy as np
+    from nfldfs_app import ui
+    t = pd.DataFrame({"Slate": ["x"], "Matchup": ["vs A"], "Salary": [7500.0], "Projected": [20.0],
+                      "Actual": [np.nan], "+/\u2212": [np.nan], "Own est.": [19.0], "Own actual": [np.nan],
+                      "My entry": ["\u2014"], "mu_color": ["#123456"]})
+    shown = ui.display_numbers(t.drop(columns=["mu_color"]), ui.HISTORY_FORMATS)
+    row = shown.iloc[0]
+    assert row["Salary"] == "$7,500" and row["Projected"] == "20.0" and row["Own est."] == "19%"
+    assert row["Actual"] == row["+/\u2212"] == row["Own actual"] == "\u2014"
+    styled = ui.styled_player_history(t)
+    assert "None" not in styled.data.to_string() and "nan" not in styled.data.to_string().lower()

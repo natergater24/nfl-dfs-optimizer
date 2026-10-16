@@ -144,11 +144,22 @@ def report_card_widget(card: dict) -> None:
                f"ownership error {sea.get('own_mae', '—')}")
 
 
+HISTORY_FORMATS = {"Salary": "${:,.0f}", "Projected": "{:.1f}", "Actual": "{:.1f}", "+/−": "{:+.1f}",
+                   "Own est.": "{:.0f}%", "Own actual": "{:.0f}%"}
+
+
+def display_numbers(df: pd.DataFrame, formats: dict) -> pd.DataFrame:
+    """Format numeric columns to strings ('—' for missing); st.dataframe shows nulls as 'None' otherwise."""
+    out = df.copy()
+    for col, fmt in formats.items():
+        if col in out:
+            out[col] = [("—" if pd.isna(v) else fmt.format(v)) for v in out[col]]
+    return out
+
+
 def styled_player_history(table: pd.DataFrame):
-    view = table.drop(columns=["mu_color"])
-    return (view.style.apply(_matchup_css(table["mu_color"].tolist()), subset=["Matchup"])
-            .format({"Salary": "${:,.0f}", "Projected": "{:.1f}", "Actual": "{:.1f}", "+/−": "{:+.1f}",
-                     "Own est.": "{:.0f}%", "Own actual": "{:.0f}%"}, na_rep="—"))
+    view = display_numbers(table.drop(columns=["mu_color"]), HISTORY_FORMATS)
+    return view.style.apply(_matchup_css(table["mu_color"].tolist()), subset=["Matchup"])
 
 
 def signed_money(v) -> str:

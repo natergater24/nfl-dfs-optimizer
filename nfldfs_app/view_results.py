@@ -116,9 +116,7 @@ def _box_score(row, pw: pd.DataFrame) -> None:
                       "Own actual": week["actual_own"]})
     num = ["Salary", "Projected", "Actual", "+/−", "Own est.", "Own actual"]
     t[num] = t[num].apply(pd.to_numeric, errors="coerce").astype(float)
-    st.dataframe(t.style.format({"Salary": "${:,.0f}", "Projected": "{:.1f}", "Actual": "{:.1f}", "+/−": "{:+.1f}",
-                                 "Own est.": "{:.0f}%", "Own actual": "{:.0f}%"}, na_rep="—"),
-                 hide_index=True, width="stretch")
+    st.dataframe(ui.display_numbers(t, ui.HISTORY_FORMATS), hide_index=True, width="stretch")
 
 
 def _entry(row, pw: pd.DataFrame, hosted: bool) -> None:
