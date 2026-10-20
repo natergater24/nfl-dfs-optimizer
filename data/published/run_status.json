@@ -1,29 +1,15 @@
 {
-  "stage": "sunday_late",
-  "started": "2026-10-18T11:47:14",
-  "finished": "2026-10-18T12:08:31",
-  "ok": true,
+  "stage": "tuesday",
+  "started": "2026-10-20T09:13:00",
+  "finished": "2026-10-20T09:41:51",
+  "ok": false,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-10-18T11:47:14",
-      "finished": "2026-10-18T11:47:17",
-      "ok": true,
-      "message": "634 players, 12 games (draftkings)"
-    },
-    {
-      "name": "vegas_if_stale",
-      "started": "2026-10-18T11:47:17",
-      "finished": "2026-10-18T11:47:17",
-      "ok": true,
-      "message": "skipped: lines fetched 153 min ago"
-    },
-    {
-      "name": "build",
-      "started": "2026-10-18T11:47:17",
-      "finished": "2026-10-18T12:08:31",
-      "ok": true,
-      "message": "9 contest types built; name match rate 83%; unmatched: Ahmani Marshall, Al-Jay Henderson, Andrew Armstrong, Anthony Smith, Antwane Wells Jr., Behren Morton, Ben Mann, Brandon Smith, Brennan Presley, Brock Lampe"
+      "started": "2026-10-20T09:13:00",
+      "finished": "2026-10-20T09:41:51",
+      "ok": false,
+      "message": "ReadTimeout: HTTPSConnectionPool(host='www.draftkings.com', port=443): Read timed out. (read timeout=30)"
     }
   ]
 }
