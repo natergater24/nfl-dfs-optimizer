@@ -2,7 +2,10 @@
 
 Left: the 9 lineup slots. Right: the whole playable pool. Swap by clicking a slot then a player, a player
 then a slot, or dragging a player onto a slot. Every change is sent back to Python as the state value
-`lineup` = {"ids": [9 dk_ids or null], "t": timestamp}."""
+`lineup` = {"ids": [one dk_id or null per slot], "t": timestamp}.
+
+Sport rules come from Python: data.slots (the roster slots in order), data.slot_elig ({slot: positions}, used
+for the empty-slot hint) and each pool record's `slots` (the slots that player may fill). NFL and NBA share it."""
 import streamlit as st
 
 HTML = '<div id="lb"></div>'
@@ -60,14 +63,16 @@ export default function (component) {
   const { data, parentElement, setStateValue } = component;
   const root = parentElement.querySelector('#lb');
   if (!root || !data) return;
-  const UI = (globalThis.__lbUI ||= { filter: 'ALL', sort: 'score', q: '', afford: true, selSlot: null, selPlayer: null });
-  if (data.focus_token != null && data.focus_token !== globalThis.__lbFocusSeen) {   // "Apply" from Outliers
-    globalThis.__lbFocusSeen = data.focus_token;
+  const NS = data.ns || 'nfl';                       // separate UI state per sport page
+  const UI = ((globalThis.__lbUIs ||= {})[NS] ||= { filter: 'ALL', sort: 'score', q: '', afford: true, selSlot: null, selPlayer: null });
+  const SEEN = (globalThis.__lbFocusSeen ||= {});
+  if (data.focus_token != null && data.focus_token !== SEEN[NS]) {   // "Apply" from Outliers
+    SEEN[NS] = data.focus_token;
     UI.selSlot = Number.isInteger(data.focus_slot) ? data.focus_slot : null;
     UI.selPlayer = null;
   }
-  const SLOTS = data.slots, CAP = data.cap;
-  const ELIG = { QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], FLEX: ['RB', 'WR', 'TE'], DST: ['DST'] };
+  const SLOTS = data.slots, CAP = data.cap, SLOT_ELIG = data.slot_elig;
+  const CHIPS = ['ALL', ...new Set(SLOTS)];
   const pool = data.pool, byId = new Map(pool.map(p => [p.dk_id, p]));
   let lineup = data.lineup.map(v => (v == null ? null : Number(v)));
   const ICON = { Chalk: '🔥 Chalk', Popular: 'Popular', Moderate: 'Moderate', Contrarian: '💎 Contrarian' };
@@ -76,7 +81,7 @@ export default function (component) {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const mu = p => `<span class="mu" style="background:${esc(p.mu_color)}" title="${esc(p.mu_text)}">vs ${esc(p.opp)} · ${esc(p.mu_label)}</span>`;
   const used = () => lineup.reduce((a, id) => a + (id && byId.get(id) ? byId.get(id).salary : 0), 0);
-  const fits = (i, p) => ELIG[SLOTS[i]].includes(p.position);
+  const fits = (i, p) => p.slots.includes(SLOTS[i]);
 
   function commit() { setStateValue('lineup', { ids: lineup, t: Date.now() }); }
   function place(i, id) {
@@ -113,7 +118,7 @@ export default function (component) {
           <div class="colhdr"><span>Player</span><span>Salary</span><span>Median / Ceil</span><span>Own</span></div>
           <div class="list" id="list"></div></div>
       </div>`;
-    root.querySelector('#chips').innerHTML = ['ALL', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'DST']
+    root.querySelector('#chips').innerHTML = CHIPS
       .map(f => `<button class="chip" data-f="${f}">${f === 'ALL' ? 'All' : f}</button>`).join('');
     const q = root.querySelector('#q'); q.value = UI.q;
     q.oninput = () => { UI.q = q.value; renderList(); };
@@ -134,7 +139,7 @@ export default function (component) {
                    sp ? (fits(i, sp) ? 'target' : 'dim') : ''].join(' ');
       const body = gone ? `<div class="nm">— unavailable — remove and pick a replacement</div>`
                      : p ? `<div><div class="nm">${esc(p.name)}${p.out ? '<span class="tag out">OUT</span>' : ''}</div><div class="meta">${esc(p.team)} ${mu(p)} · ${k(p.salary)} · ${p.median.toFixed(1)} pts · ${ICON[p.tier]}</div></div>`
-                     : `<div class="nm">— empty — drop or pick a ${s === 'FLEX' ? 'RB/WR/TE' : s}</div>`;
+                     : `<div class="nm">— empty — drop or pick a ${SLOT_ELIG[s].join('/')}</div>`;
       return `<div class="${cls}" data-i="${i}"><span class="pos">${s}</span>${body}${p || gone ? `<button class="x" data-rm="${i}" title="Remove">×</button>` : '<span></span>'}</div>`;
     }).join('');
     const hint = root.querySelector('#hint');
@@ -144,12 +149,12 @@ export default function (component) {
     root.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.f === activeFilter()));
   }
 
-  function activeFilter() { return UI.selSlot != null ? (SLOTS[UI.selSlot] === 'FLEX' ? 'FLEX' : SLOTS[UI.selSlot]) : UI.filter; }
+  function activeFilter() { return UI.selSlot != null ? SLOTS[UI.selSlot] : (CHIPS.includes(UI.filter) ? UI.filter : 'ALL'); }
 
   function renderList() {
     const f = activeFilter(), q = UI.q.trim().toLowerCase(), u = used();
     const selSlot = UI.selSlot, curSal = selSlot != null && lineup[selSlot] && byId.get(lineup[selSlot]) ? byId.get(lineup[selSlot]).salary : 0;
-    let rows = pool.filter(p => !p.out && (f === 'ALL' || (f === 'FLEX' ? ELIG.FLEX : [f]).includes(p.position))
+    let rows = pool.filter(p => !p.out && (f === 'ALL' || p.slots.includes(f))
       && (!q || (p.name + ' ' + p.team).toLowerCase().includes(q)));
     const leftAfter = p => CAP - (u - curSal) - p.salary;
     if (UI.afford && selSlot != null) rows = rows.filter(p => leftAfter(p) >= 0 || lineup.includes(p.dk_id));

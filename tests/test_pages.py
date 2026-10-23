@@ -12,8 +12,11 @@ def test_nfl_is_the_default_page(make_app, published_dir):
     assert any(t.value == "NFL DFS Lineups" for t in at.title)
 
 
-def test_nba_page_renders():
+def test_nba_page_renders(monkeypatch, tmp_path):
     # AppTest can't follow st.navigation to another page, so run the NBA page script directly.
+    # (Full NBA page coverage with built slates lives in tests/nba/test_app.py.)
+    monkeypatch.setenv("NFLDFS_PUBLISHED", str(tmp_path))
+    monkeypatch.setenv("NFLDFS_FORCE_HOSTED", "1")
     at = AppTest.from_file(str(ROOT / "nba_page.py"), default_timeout=30).run()
     assert not at.exception
     assert [t.value for t in at.title] == ["NBA DFS Lineups"]

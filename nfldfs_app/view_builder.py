@@ -13,6 +13,13 @@ from nfldfs_app.scoring import published_metric
 
 BUILDER_FIELDS = ["dk_id", "name", "position", "team", "opp", "salary", "median", "ceiling", "own_pct", "tier",
                   "score", "value", "mu_color", "mu_text", "mu_label", "out"]
+SLOT_ELIG = {"QB": ["QB"], "RB": ["RB"], "WR": ["WR"], "TE": ["TE"], "FLEX": ["RB", "WR", "TE"], "DST": ["DST"]}
+_SLOT_ORDER = list(dict.fromkeys(ROSTER_SLOTS))
+
+
+def player_slots(position: str) -> list[str]:
+    """The roster slots an NFL player of this position may fill (FLEX takes RB/WR/TE)."""
+    return [s for s in _SLOT_ORDER if position in SLOT_ELIG[s]]
 
 
 def builder_records(pool: pd.DataFrame, weights: dict, lineup_ids=()) -> list[dict]:
@@ -25,6 +32,7 @@ def builder_records(pool: pd.DataFrame, weights: dict, lineup_ids=()) -> list[di
     recs = play[BUILDER_FIELDS].round(3).to_dict("records")
     for r in recs:
         r["dk_id"], r["salary"] = int(r["dk_id"]), int(r["salary"])
+        r["slots"] = player_slots(r["position"])
     return recs
 
 
@@ -101,7 +109,7 @@ def render(d, key, label, field_scores):
     else:
         from nfldfs_app.builder_component import lineup_builder
         res = lineup_builder(key="builder", on_lineup_change=lambda: None, data={
-            "pool": builder_records(d.pool, contest["weights"], ids), "lineup": ids, "slots": list(ROSTER_SLOTS),
+            "pool": builder_records(d.pool, contest["weights"], ids), "lineup": ids, "slots": list(ROSTER_SLOTS), "slot_elig": SLOT_ELIG, "ns": "nfl",
             "cap": SALARY_CAP, "focus_slot": st.session_state.get("focus_slot"),
             "focus_token": st.session_state.get("focus_token")})
         value = getattr(res, "lineup", None)

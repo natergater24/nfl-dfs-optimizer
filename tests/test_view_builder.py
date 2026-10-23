@@ -83,3 +83,20 @@ def test_my_lineup_tab_defaults_and_load_blank(make_app, published_dir):
     at.selectbox(key="builder_start").set_value("Blank lineup").run()
     at.button(key="builder_load").click().run()
     assert at.session_state["my_ids"] == [None] * 9 and not at.exception
+
+
+def test_builder_records_nfl_unchanged(published_dir):
+    d = _d(published_dir)
+    recs = view_builder.builder_records(d.pool, CONTEST_TYPES["single_entry"]["weights"])
+    want = {"QB": ["QB"], "RB": ["RB", "FLEX"], "WR": ["WR", "FLEX"], "TE": ["TE", "FLEX"], "DST": ["DST"]}
+    assert {r["position"] for r in recs} == set(want)
+    for r in recs:
+        assert r["slots"] == want[r["position"]]
+    assert view_builder.SLOT_ELIG == {"QB": ["QB"], "RB": ["RB"], "WR": ["WR"], "TE": ["TE"],
+                                      "FLEX": ["RB", "WR", "TE"], "DST": ["DST"]}
+
+
+def test_builder_component_takes_eligibility_from_data():
+    from nfldfs_app import builder_component as bc
+    assert "data.slot_elig" in bc.JS and "p.slots.includes" in bc.JS
+    assert "FLEX: ['RB', 'WR', 'TE']" not in bc.JS          # no NFL-only rules hard-coded in the shared component
