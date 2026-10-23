@@ -428,8 +428,12 @@ def _nba_salary_path(day: dt.date, dg) -> Path:
     return nba_config.RAW_NBA / day.isoformat() / f"salaries_{dg}.csv"
 
 
+_NBA_RUN = {"idle_off_day": False}     # set by the salaries step: no slate today AND none yesterday's run either
+
+
 def step_nba_salaries(today, args) -> str:
     day = _nba_today(args, today)
+    _NBA_RUN["idle_off_day"] = False
     slates = nba_dk.classic_slates(nba_dk.fetch_lobby(), day)
     warnings, ok = "", []
     for s in slates:
@@ -441,7 +445,9 @@ def step_nba_salaries(today, args) -> str:
             warnings += f"; WARNING: {s['name']} salaries not downloaded ({type(e).__name__})"
     atomic_write_text(nba_config.PROCESSED_NBA / "slates.json", json.dumps(slates, indent=2))
     if not slates:
-        atomic_write_text(nba_config.PUBLISHED_NBA / "slates.json", "[]")
+        pub = nba_config.PUBLISHED_NBA / "slates.json"
+        _NBA_RUN["idle_off_day"] = pub.exists() and pub.read_text().strip() in ("[]", "")
+        atomic_write_text(pub, "[]")
         return NO_NBA_SLATE
     if slates and not ok:
         raise RuntimeError("no NBA salary file could be downloaded" + warnings)
@@ -473,18 +479,46 @@ def step_nba_stats_if_missing(today, args) -> str:
     if not _nba_slates():
         return NO_NBA_SLATE
     cur, last = nba_season_years(_nba_today(args, today))
+    stale = []
     for y in (cur, last):
-        nba_stats.download_season(y, nba_config.RAW_NBA / "stats")
-    return f"season stats {last} and {cur} ready"
+        p = nba_stats.download_season(y, nba_config.RAW_NBA / "stats")
+        if isinstance(p, Path) and time.time() - p.stat().st_mtime >= nba_stats.MAX_AGE_H * 3600:
+            stale.append(y)
+    msg = f"season stats {last} and {cur} ready"
+    if stale:
+        log.warning("NBA season stats %s could not be refreshed; using cached copies", stale)
+        msg += f"; WARNING: season stats {', '.join(map(str, stale))} not refreshed (using the cached copy)"
+    return msg
 
 
 def _nba_rates(year: int) -> pd.DataFrame:
     return nba_stats.player_rates(pd.read_parquet(nba_config.RAW_NBA / "stats" / f"player_season_stats_{year}.parquet"))
 
 
+def _prune_nba_published(keep) -> None:
+    """Delete per-slate folders (all-digit names) whose draft-group id isn't in `keep`; DK ids change daily."""
+    keep = {str(k) for k in keep}
+    root = nba_config.PUBLISHED_NBA
+    if not root.is_dir():
+        return
+    for d in root.iterdir():
+        if d.is_dir() and d.name.isdigit() and d.name not in keep:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def _built_today(dg, day: dt.date) -> bool:
+    """True when this slate's published folder already holds a build made for `day` (e.g. this afternoon's)."""
+    p = nba_config.PUBLISHED_NBA / str(dg) / "build_meta.json"
+    try:
+        return json.loads(p.read_text()).get("slate_date") == day.isoformat()
+    except (OSError, ValueError):
+        return False
+
+
 def step_nba_build(today, args) -> str:
     slates = _nba_slates()
     if not slates:
+        _prune_nba_published(())
         return NO_NBA_SLATE
     day = _nba_today(args, today)
     odds_p = _nba_odds_path()
@@ -496,25 +530,28 @@ def step_nba_build(today, args) -> str:
     for s in slates:
         dg = s["draft_group_id"]
         if s.get("downloaded") is False:
-            flags.append({**s, "published": False})
+            flags.append({**s, "published": _built_today(dg, day)})
             continue
         try:
             res = nbadfs.build.build_slate(_nba_salary_path(day, dg).read_text(encoding="utf-8-sig"), lines,
                                            rates_last, rates_cur)
             res["meta"].update(draft_group_id=dg, name=s["name"], start=s["start"], games=s["games"],
-                               odds_remaining=odds.get("requests_remaining"))
+                               odds_remaining=odds.get("requests_remaining"), slate_date=day.isoformat())
             nbadfs.build.write_published(res, nba_config.PUBLISHED_NBA / str(dg))
             flags.append({**s, "published": True})
             built += 1
         except Exception as e:
             log.exception("NBA slate %s failed", s["name"])
             warnings += f"; WARNING: {s['name']} not built ({type(e).__name__})"
-            flags.append({**s, "published": False})
+            flags.append({**s, "published": _built_today(dg, day)})
     atomic_write_text(nba_config.PUBLISHED_NBA / "slates.json", json.dumps(flags, indent=2))
+    _prune_nba_published(s["draft_group_id"] for s in slates)
     return f"{built} of {len(slates)} NBA slate(s) built{warnings}"
 
 
 def step_publish(today, args) -> str:
+    if args.stage == "nba" and _NBA_RUN["idle_off_day"]:
+        return "skipped: nothing new to publish"      # still no NBA slate: don't commit run_status.json churn
     return publish.publish(config.ROOT, ["data/published", "data/history"], f"Slate update: {args.stage} {today}")
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from pathlib import Path
 
@@ -21,6 +22,11 @@ from .stats import match_rates
 PUBLISHED_FILES = ["pool.parquet", "lineups.parquet", "swaps.parquet", "field.npy", "build_meta.json"]
 
 
+def sims_fingerprint(sims: np.ndarray) -> str:
+    """sha256 of the first 64 simulated rows: lets another machine tell whether numpy regenerated the same sims."""
+    return hashlib.sha256(np.ascontiguousarray(sims[:64]).tobytes()).hexdigest()
+
+
 def build_slate(salaries_text: str, lines: pd.DataFrame, rates_last: pd.DataFrame, rates_cur: pd.DataFrame, *,
                 n_sims: int = N_SIMS, seed: int = SEED, field_size: int = FIELD_SIZE,
                 n_candidates: int = N_CANDIDATES) -> dict:
@@ -33,6 +39,7 @@ def build_slate(salaries_text: str, lines: pd.DataFrame, rates_last: pd.DataFram
     field = sample_field(pool, field_size, np.random.default_rng(seed)).astype(np.int32)
     lineups, swaps = build_all(pool, sims, field, n_candidates=n_candidates, seed=seed)
     meta = {"n_sims": int(n_sims), "seed": int(seed), "stats_match_rate": float(match_rate),
+            "sims_fingerprint": sims_fingerprint(sims),
             "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
     return {"pool": pool, "sims": sims, "lineups": lineups, "swaps": swaps, "field": field, "meta": meta}
 

@@ -640,14 +640,14 @@ def test_nba_stage_noop_without_slates(nba_env, monkeypatch):
     assert all(s["message"].startswith("skipped") for s in st["steps"])
 
 
-def test_nba_off_day_after_a_game_day_leaves_old_folder_but_empties_slates(nba_env, monkeypatch):
+def test_nba_off_day_after_a_game_day_prunes_old_folder_and_empties_slates(nba_env, monkeypatch):
     tmp_path, calls = nba_env
     _one_slate(monkeypatch)
     assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
     assert (tmp_path / "published" / "nba" / "155547" / "pool.parquet").exists()
     assert run_pipeline.main(["--stage", "nba", "--today", "2026-10-25"]) == 0   # no slates that day
     assert json.loads((tmp_path / "published" / "nba" / "slates.json").read_text()) == []
-    assert (tmp_path / "published" / "nba" / "155547").exists()                  # stale folder may remain
+    assert not (tmp_path / "published" / "nba" / "155547").exists()              # stale folder pruned
 
 
 def test_nba_status_file_separate(nba_env):
@@ -744,3 +744,72 @@ def test_odds_failure_does_not_stop_the_stage(nba_env, monkeypatch):
     steps = {s["name"]: s["message"] for s in _status(tmp_path)["steps"]}
     assert "WARNING: NBA lines not refreshed (RuntimeError)" in steps["nba_vegas_if_stale"]
     assert steps["nba_build"].startswith("1 of 1")
+
+
+def test_nba_prunes_stale_slate_folders_only(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    nba = tmp_path / "published" / "nba"
+    (nba / "99999").mkdir(parents=True)
+    (nba / "99999" / "pool.parquet").write_text("x")
+    (nba / "notes.txt").write_text("keep")
+    (nba / "archive").mkdir()
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    assert not (nba / "99999").exists()
+    assert (nba / "155547" / "pool.parquet").exists() and (nba / "notes.txt").exists() and (nba / "archive").exists()
+
+
+def test_nba_publish_skipped_on_repeat_no_slate_day_only(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    published = []
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "publish", run_pipeline.step_publish)
+    monkeypatch.setattr(run_pipeline.publish, "publish", lambda *a, **k: published.append(1) or "committed")
+    empty = lambda: {"DraftGroups": []}                                          # noqa: E731
+    real = run_pipeline.nba_dk.fetch_lobby
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0        # slates exist -> publish
+    assert len(published) == 1
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_lobby", empty)
+    assert run_pipeline.main(["--stage", "nba", "--today", "2026-10-25"]) == 0   # slates -> [] : tell the phone
+    assert len(published) == 2
+    assert run_pipeline.main(["--stage", "nba", "--today", "2026-10-26"]) == 0   # [] -> [] : nothing new
+    assert len(published) == 2
+    assert _status(tmp_path)["publish"] == "skipped: nothing new to publish"
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_lobby", real)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0        # slates return -> publish
+    assert len(published) == 3
+
+
+def test_failed_rerun_keeps_todays_earlier_build_published(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    _one_slate(monkeypatch)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    nba = tmp_path / "published" / "nba"
+    slates = lambda: json.loads((nba / "slates.json").read_text())               # noqa: E731
+    import nbadfs.build as nb
+    monkeypatch.setattr(nb, "build_slate", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad")))
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0        # evening build fails
+    assert slates()[0]["published"] is True                                      # afternoon build still served
+    msg = [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_build"][0]["message"]
+    assert "WARNING" in msg and "not built" in msg
+    assert (nba / "155547" / "pool.parquet").exists()
+    # an older day's build does not count
+    meta = nba / "155547" / "build_meta.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "slate_date": "2026-10-22"}))
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    assert slates()[0]["published"] is False
+
+
+def test_partial_salary_failure_keeps_todays_earlier_build_published(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0        # all three slates built
+    nba = tmp_path / "published" / "nba"
+    text = (FIXD / "nba_salaries_sample.csv").read_text()
+
+    def flaky(dg):
+        if dg == 155547:
+            raise OSError("down")
+        return text
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_salary_csv", flaky)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    slates = json.loads((nba / "slates.json").read_text())
+    assert [s["published"] for s in slates] == [True, True, True]
+    assert "WARNING: " in [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_salaries"][0]["message"]

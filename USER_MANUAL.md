@@ -91,7 +91,8 @@ the previous September.
 Use the 🏈 / 🏀 pages in the left-hand menu to switch sports. The 🏀 NBA page works like the NFL one.
 - **Automatic builds:** every NBA day at **2:00 PM** and **6:30 PM ET** your Mac pulls DraftKings salaries,
   injuries and Vegas lines, builds the lineups, and publishes them to your phone. On days with no NBA slate
-  nothing runs. Keep the Mac plugged in with the lid open at those times.
+  nothing runs. Keep the Mac plugged in with the lid open at those times. These times follow the Mac's clock,
+  so set the Mac to Eastern time.
 - **Slate picker:** the page opens on the next slate that hasn't started. Choose Main, Night or Late Night.
 - **⭐ Recommended:** the best lineup for the slate, with swap suggestions. ▲ means the swap scores better,
   ▼ means it scores worse. Click **Download** to get the CSV for DraftKings.

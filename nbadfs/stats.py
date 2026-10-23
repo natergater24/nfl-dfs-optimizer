@@ -1,6 +1,7 @@
 """ESPN season stats (sportsdataverse release) -> per-player minutes and DK points per minute."""
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from nfldfs.teams import normalize_name
 from .rules import dk_points
 
 BASE_URL = "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_nba_player_season_stats"
+log = logging.getLogger(__name__)
 MAX_AGE_H = 20
 THREES = "avgThreePointFieldGoalsMade-avgThreePointFieldGoalsAttempted"
 RATE_COLS = ["games", "minutes", "dk_per_min"]
@@ -26,8 +28,14 @@ def download_season(year: int, dest_dir, session=None) -> Path:
     if dest.exists() and time.time() - dest.stat().st_mtime < MAX_AGE_H * 3600:
         return dest
     s = session or requests.Session()
-    r = s.get(f"{BASE_URL}/player_season_stats_{year}.parquet", timeout=60)
-    r.raise_for_status()
+    try:
+        r = s.get(f"{BASE_URL}/player_season_stats_{year}.parquet", timeout=60)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        if dest.exists():                         # a stale copy beats failing the whole run; the caller warns
+            log.warning("NBA stats %s not refreshed (%s); using the cached copy", year, type(e).__name__)
+            return dest
+        raise
     dest.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_bytes(dest, r.content)
     return dest

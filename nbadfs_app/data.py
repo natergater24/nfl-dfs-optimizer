@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from nbadfs.build import sims_fingerprint
 from nbadfs.simulate import simulate
 from nfldfs import config
 from nfldfs.sim_eval import lineup_scores
@@ -97,6 +98,12 @@ def sims_for(slate: SlateData) -> np.ndarray:
     """The build's simulations, regenerated from the published pool + seed (cached per slate build)."""
     m = slate.meta
     return _sims(slate.dg, str(m.get("built_at_utc", "")), int(m["n_sims"]), int(m["seed"]), slate.pool)
+
+
+def sims_mismatch(slate: SlateData) -> bool:
+    """True when the regenerated sims differ from the Mac's build (different numpy). Old builds w/o a fingerprint: False."""
+    want = slate.meta.get("sims_fingerprint")
+    return bool(want) and sims_fingerprint(sims_for(slate)) != want
 
 
 @st.cache_resource(show_spinner=False, max_entries=4)

@@ -62,8 +62,8 @@ def player_label(row, dk_id=None) -> str:
 
 
 def delta_text(delta: float) -> str:
-    v = float(delta) * 100
-    return f"{'+' if v >= 0 else '−'}{abs(v):.1f} pts"
+    v = round(float(delta) * 100, 1) + 0.0         # round first: a tiny negative must not read "−0.0"
+    return f"{'+' if v > 0 else '−' if v < 0 else ''}{abs(v):.1f} pts"
 
 
 def lineup_table(df: pd.DataFrame):
@@ -291,6 +291,14 @@ def _metrics(cols, total, median, ceiling):
     cols[2].metric("Ceiling (p85 sum)", f"{ceiling:.1f}")
 
 
+SIMS_DIFFER = ("Simulations on this device differ slightly from the Mac's build; percentages may differ a little.")
+
+
+def _sims_note(sd: data.SlateData) -> None:
+    if data.sims_mismatch(sd):
+        st.caption(SIMS_DIFFER)
+
+
 def _recommended(sd: data.SlateData, key: str) -> None:
     rec = _rec(sd, key)
     if rec.empty:
@@ -326,7 +334,8 @@ def _recommended(sd: data.SlateData, key: str) -> None:
             continue
         o, n = by.loc[int(s.out_id)], by.loc[int(s.in_id)]
         diff = int(n.salary) - int(o.salary)
-        arrow = "▲" if s.delta > 0 else "▼" if s.delta < 0 else "＝"
+        shown = round(float(s.delta) * 100, 1)
+        arrow = "▲" if shown > 0 else "▼" if shown < 0 else "＝"
         c = st.columns([7, 1], vertical_alignment="center")
         c[0].markdown(f"Swap **{o['name']}** → **{n['name']}** ({n.positions}, {n.team}, {ui.TIER_ICON[n.tier]} "
                       f"{n.own_pct:.1f}%) · {'+' if diff >= 0 else '−'}\\${abs(diff):,} · "
@@ -360,6 +369,7 @@ def _my_lineup(sd: data.SlateData, key: str, label: str) -> None:
     m = st.columns(4)
     _metrics(m, status["used"], by.loc[known, "median"].sum(), by.loc[known, "ceiling"].sum())
     if status["valid"]:
+        _sims_note(sd)
         rec = _rec(sd, key)
         m[3].metric(f"{_phrase(key)} in", f"{lineup_metric(sd, status['picked'], key):.0%} of sims",
                     f"recommended: {float(rec.metric.iloc[0]):.0%}" if not rec.empty else None,

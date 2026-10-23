@@ -80,3 +80,19 @@ def test_download_season_caches(tmp_path):
     os.utime(p, (old, old))
     stats.download_season(2027, tmp_path, s)
     assert len(s.urls) == 2                       # >20 h old: re-downloaded
+
+
+class _Boom:
+    def get(self, url, timeout=None):
+        raise stats.requests.ConnectionError("down")
+
+
+def test_download_season_falls_back_to_stale_copy(tmp_path):
+    import os
+    import pytest
+    with pytest.raises(stats.requests.ConnectionError):
+        stats.download_season(2027, tmp_path, _Boom())             # no cached copy: raise
+    p = stats.download_season(2027, tmp_path, _S())
+    old = p.stat().st_mtime - 30 * 3600
+    os.utime(p, (old, old))
+    assert stats.download_season(2027, tmp_path, _Boom()) == p     # stale cache is returned, not an error

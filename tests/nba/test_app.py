@@ -195,6 +195,40 @@ def test_swap_text_keeps_sign():
     assert views.delta_text(-0.0058) == "−0.6 pts"
 
 
+def test_swap_text_tiny_negative_is_not_signed_zero():
+    from nbadfs_app import views
+    assert views.delta_text(-0.0004) == "0.0 pts" and views.delta_text(0.0004) == "0.0 pts"
+    assert views.delta_text(0) == "0.0 pts"
+
+
+def test_sims_fingerprint_written_and_matches(nba_pub):
+    from nbadfs_app import data
+    pub, res = nba_pub
+    assert len(res["meta"]["sims_fingerprint"]) == 64
+    sd = data.load_slate(pub / "nba", 901)
+    assert sd.meta["sims_fingerprint"] == res["meta"]["sims_fingerprint"]
+    assert data.sims_mismatch(sd) is False
+
+
+def test_tampered_fingerprint_flags_mismatch(nba_pub):
+    from nbadfs_app import data
+    pub, _ = nba_pub
+    sd = data.load_slate(pub / "nba", 902)
+    sd.meta = {**sd.meta, "sims_fingerprint": "0" * 64}
+    assert data.sims_mismatch(sd) is True
+
+
+def test_mismatch_shows_caption(nba_pub, monkeypatch):
+    from nbadfs_app import data, views
+    pub, _ = nba_pub
+    monkeypatch.setattr(data, "sims_mismatch", lambda sd: True)
+    at = _app(monkeypatch, pub, "1")
+    assert any(views.SIMS_DIFFER in c.value for c in at.caption)
+    monkeypatch.setattr(data, "sims_mismatch", lambda sd: False)
+    at = _app(monkeypatch, pub, "1")
+    assert not any(views.SIMS_DIFFER in c.value for c in at.caption)
+
+
 def test_builder_records_nba_slots(nba_pub):
     from nbadfs_app import data, views
     pub, _ = nba_pub
