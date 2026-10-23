@@ -73,6 +73,9 @@ the previous September.
 **On your phone** My Results is read-only and says "Edit on your Mac".
 
 ## If a scheduled run was missed
+- **Best setup on run mornings (Tue/Thu/Sun):** Mac plugged in, or at least with the lid open. Each run keeps the
+  Mac awake while it works, even on battery, but a closed lid on battery forces sleep and the run crawls along in
+  short bursts (in October a 2-minute build took 3½ hours that way).
 - **Mac asleep:** the missed run happens as soon as it wakes.
 - **Mac off or logged out:** the run doesn't happen.
 - Each later run catches up: Thursday covers a missed Tuesday, Sunday 9:00 covers a missed Thursday, and

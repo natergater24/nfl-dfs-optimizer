@@ -41,3 +41,11 @@ def test_sunday_agent_abandons_process_group():
     # run_stage.sh leaves a background caffeinate running through the 11:45 run;
     # launchd must not kill it when the 9:00 job exits.
     assert _render("sunday")["AbandonProcessGroup"] is True
+
+
+def test_scheduled_stages_declare_user_active():
+    # Without -u a battery dark wake goes back to sleep mid-run (Oct 2026: builds took hours).
+    text = (ROOT / "scripts/run_stage.sh").read_text()
+    assert "caffeinate -dimsu" in text
+    for stage in ("sunday)", "tuesday|thursday|sunday_late)"):
+        assert stage in text
