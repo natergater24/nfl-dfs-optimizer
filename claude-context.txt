@@ -85,9 +85,6 @@ LIVE DRY RUN (2026-10-12, slate Sun 2026-10-18, draft group 154941)
 
 OUTSTANDING
 - Showdown Captain Mode support (Nathan wants it later — plan separately).
-- Plan 2: Streamlit app including the "My Lineup" custom builder (added to the spec); publish to GitHub /
-  Streamlit Cloud; LaunchAgent schedule (Sunday 11:45 run reuses the 9:00 Vegas lines); results import +
-  sidebar guide; USER_MANUAL.
 - Ownership regression after 3 imported weeks of real results.
 - Red-zone shares (revisit if TD allocation proves weak in the report card).
 - Option C: Sleeper blend.
@@ -155,6 +152,17 @@ OUTSTANDING (modeling)
   ok=True and "WARNING" in the text renders st.warning. record_my_build swallows errors. 273 tests pass -W error.
 OUTSTANDING (My Results)
 - Verify the real standings Lineup/EntryName format with Nathan's first file (Sun Oct 18 Double Up).
-- Check the DK HISTORY page for an entry-history CSV; if present, plan an import for fees/winnings.
 - Finalize the sidebar import guide wording.
 - Parked: lineup picker for Add entry by hand; no lock between app edits and a pipeline run on entries.parquet.
+
+=== 2026-10-23: entry-history import ===
+DraftKings' draftkings-contest-entry-history.csv (Entry_Key == entry_id, Contest_Key == contest_id, no lineup, no
+username) now imports fees/winnings. entries.py: ENTRY_HISTORY_COLUMNS, is_entry_history (header sniff),
+read_entry_history (NFL + Classic only; others counted as skipped; winnings = non-ticket + ticket), merge_entry_history
+(atomic upsert). Merge rules for an existing entry: fee/winnings ALWAYS take the file's value when present and leave
+typed_fields; place/points/field_size/contest_id take non-blank file values; contest_name/contest_type only fill a
+blank, untyped value; players/projected/lineup_source never touched. run_pipeline step_results also finds
+Downloads/draftkings-contest-entry-history*.csv, runs it AFTER standings, then moves it to
+raw/entry_history/entry-history-<timestamp>.csv (bad file -> raw/entry_history/skipped, reported like a bad standings
+file). _new_results_waiting covers both kinds; --results-file routes by header. Needs no DK_USERNAME or slate snapshot.
+Sidebar guide and upload label updated; USER_MANUAL/README updated.

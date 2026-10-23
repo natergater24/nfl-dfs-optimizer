@@ -97,6 +97,6 @@ Deviations from the design above, as built on branch `my-results`:
 - The `tuesday` stage now publishes, so nflverse actual points reach the phone the same day.
 - Bookkeeping (contest list, player history, lineup archive, actual-points fill, entry reading) can't stop a live
   stage; a failure becomes a "WARNING" note on the step.
-- Deferred: importing DraftKings' entry-history CSV (open item 2) and DST actual points from nflverse (open item 3).
+- Entry-history CSV import shipped 2026-10-23 (see claude-context.txt). Deferred: DST actual points from nflverse (open item 3).
 - Parked: **➕ Add entry by hand** has no lineup picker yet; there is no lock between app edits and a pipeline run
   writing `entries.parquet` at the same moment.

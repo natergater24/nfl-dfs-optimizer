@@ -10,7 +10,7 @@
   ./py run_pipeline.py --stage build       rebuild from what's already downloaded
   (thursday and sunday also publish when they finish)
   add --salary-csv PATH to use a manually downloaded DKSalaries.csv
-  add --results-file PATH to import one specific standings file
+  add --results-file PATH to import one specific standings or entry-history file
 """
 from __future__ import annotations
 
@@ -266,12 +266,75 @@ def _import_my_entries(f: Path, snap_df: pd.DataFrame, slate_date: str, dg: str)
     return f"{len(rows)} of your entries"
 
 
+def _file_entry_history(f: Path) -> None:
+    """Move an imported entry-history file to a unique name (DraftKings reuses the same file name)."""
+    folder = config.RAW / "entry_history"
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    target, n = folder / f"entry-history-{stamp}.csv", 1
+    while target.exists():
+        n += 1
+        target = folder / f"entry-history-{stamp}-{n}.csv"
+    shutil.move(str(f), str(target))
+
+
+def _import_entry_history(files: list[Path]) -> tuple[str, list[str]]:
+    """Import DraftKings entry-history files (fees, winnings, place) into entries.parquet. No username needed."""
+    path = config.HISTORY / "entries.parquet"
+    new = updated = other = 0
+    skipped = []
+    for f in files:                           # one bad file must not block the others
+        try:
+            rows, ignored = entries.read_entry_history(f)
+            known = set(entries.load_entries(path)["entry_id"])
+            ids = set(rows["entry_id"])
+            entries.merge_entry_history(path, rows)
+            new, updated, other = new + len(ids - known), updated + len(ids & known), other + ignored
+            _file_entry_history(f)
+        except Exception as e:
+            log.exception("entry-history file %s failed", f)
+            skipped.append(f"skipped {f.name}: {type(e).__name__}: {e}")
+            _set_aside(f, config.RAW / "entry_history" / "skipped")
+    msg = f"entry history: {updated} entries updated, {new} new"
+    if other:
+        msg += f" ({other} non-Classic rows skipped)"
+    return msg, skipped
+
+
 def step_results(today, args) -> str:
     done = config.RAW / "standings"
-    files = ([Path(args.results_file)] if getattr(args, "results_file", None)
-             else results.find_new_standings(config.DOWNLOADS, done))
-    if not files:
-        return "skipped: no new contest-standings file"
+    if getattr(args, "results_file", None):
+        f = Path(args.results_file)
+        history_files, files = ([f], []) if entries.is_entry_history(f) else ([], [f])
+    else:
+        files, history_files = (results.find_new_standings(config.DOWNLOADS, done),
+                                entries.find_entry_history(config.DOWNLOADS))
+    if not files and not history_files:
+        return "skipped: no new contest-standings or entry-history file"
+    msgs, problems = [], []
+    if files:
+        try:
+            msgs.append(_import_standings(files, today, done))
+        except _StandingsProblem as e:
+            msgs.append(e.msg)
+            problems += e.skipped
+    if history_files:                         # after standings, so players exist before money fills in
+        msg, skipped = _import_entry_history(history_files)
+        msgs.append(msg)
+        problems += skipped
+    msg = "; ".join(msgs)
+    if problems:
+        raise RuntimeError(f"{msg}; " + "; ".join(problems))
+    return msg
+
+
+class _StandingsProblem(Exception):
+    def __init__(self, msg, skipped):
+        super().__init__(msg)
+        self.msg, self.skipped = msg, skipped
+
+
+def _import_standings(files: list[Path], today, done: Path) -> str:
     done.mkdir(parents=True, exist_ok=True)
     hist, slates, imported, skipped, entry_notes = None, [], [], [], []
     for f in files:                           # one bad file must not block the others
@@ -321,13 +384,14 @@ def step_results(today, args) -> str:
     if entry_notes:
         msg += "; " + "; ".join(sorted(set(entry_notes)))
     if skipped:
-        raise RuntimeError(f"{msg}; " + "; ".join(skipped))
+        raise _StandingsProblem(msg, skipped)
     return msg
 
 
 def _new_results_waiting() -> bool:
     try:
-        return bool(results.find_new_standings(config.DOWNLOADS, config.RAW / "standings"))
+        return bool(results.find_new_standings(config.DOWNLOADS, config.RAW / "standings")
+                    or entries.find_entry_history(config.DOWNLOADS))
     except Exception:
         return True                           # let step_results record the error (e.g. PermissionError) loudly
 
@@ -373,7 +437,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", required=True)
     ap.add_argument("--salary-csv", help="use a manually downloaded DKSalaries.csv")
-    ap.add_argument("--results-file", help="import one DraftKings contest-standings file")
+    ap.add_argument("--results-file", help="import one DraftKings contest-standings or entry-history file")
     ap.add_argument("--today", help="override today's date (YYYY-MM-DD), for testing")
     args = ap.parse_args(argv)
     if args.stage not in STAGES:
@@ -399,7 +463,7 @@ def main(argv=None) -> int:
 
 def _run(args, today) -> int:
     if args.stage == "results" and not args.results_file and not _new_results_waiting():
-        log.info("results: no new contest-standings file — nothing to do")   # keep the last import's status
+        log.info("results: no new contest-standings or entry-history file — nothing to do")   # keep the last import's status
         return 0
     status_file = "results_status.json" if args.stage == "results" else "run_status.json"
     status = RunStatus(config.PUBLISHED / status_file, args.stage)

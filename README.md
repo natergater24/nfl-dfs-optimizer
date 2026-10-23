@@ -25,7 +25,7 @@ Outputs land in `data/published/` (lineups, swaps, player pool, upload CSV, run 
 Upload only the row(s) you want (plus the header) to DraftKings.
 
 My Results tab: your contest entries (place, points, winnings, which app lineup) filled from exported standings
-plus typed winnings, and per-player history. Needs `DK_USERNAME` in `env.txt`; usernames are never published.
+plus fees and winnings from DraftKings' entry-history download (typing is the fallback), and per-player history. Needs `DK_USERNAME` in `env.txt`; usernames are never published.
 Every build of a slate is archived in `data/processed/slate_lineups/`, so entries from any build are recognized.
 The `tuesday` stage fills nflverse actual points and publishes them. Season filter = NFL season (January slates
 belong to the prior season). Unknown contest types show "Type not set". Spec:

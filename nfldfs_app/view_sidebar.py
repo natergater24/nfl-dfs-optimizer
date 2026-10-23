@@ -18,7 +18,10 @@ IMPORT_GUIDE = """
 7. That's it — your Mac imports it within a minute (or click **Check for results** below) and files it away.
 8. You'll see **✅ imported …** here. The 📈 Report card on the Recommended tab updates after that.
 
-**If nothing happens:** drag the zip file into **Upload results** below and click **Import**.
+**For your money (fees and winnings):** on the same **My Contests** page's completed/history view, download your
+**entry history** (`draftkings-contest-entry-history.csv`) — it lands in Downloads and imports by itself.
+
+**If nothing happens:** drag the file into **Upload results or entry history** below and click **Import**.
 """
 
 
@@ -63,7 +66,7 @@ def render(d, hosted: bool) -> None:
             st.caption("Importing results and uploading files work in the app on your Mac.")
         if st.button("Check for results", disabled=hosted, key="check_results", width="stretch"):
             _run("results")
-        up = st.file_uploader("Upload results (fallback)", type=["zip", "csv"], disabled=hosted, key="up_results")
+        up = st.file_uploader("Upload results or entry history (fallback)", type=["zip", "csv"], disabled=hosted, key="up_results")
         if up is not None and st.button("Import", key="import_upload", disabled=hosted):
             _run("results", "--results-file", str(actions.save_upload(up, config.RAW / "standings_inbox")))
         sal = st.file_uploader("Upload DKSalaries.csv (fallback)", type=["csv"], disabled=hosted, key="up_salaries")

@@ -488,3 +488,95 @@ def test_results_set_actuals_failure_is_a_warning(tmp_path, monkeypatch):
     msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
     assert "imported 1 file(s)" in msg and "WARNING: actual points not saved to player history (RuntimeError)" in msg
     assert (tmp_path / "raw" / "standings" / z.name).exists()
+
+
+# ---- entry-history import -------------------------------------------------------------------------------------
+EH_HEADER = ('"Sport","Game_Type","Entry_Key","Entry","Contest_Key","Contest_Date_EST","Place","Points",'
+             '"Winnings_Non_Ticket","Winnings_Ticket","Contest_Entries","Entry_Fee","Prize_Pool","Places_Paid"\n')
+EH_ROW = ('"NFL","Classic",5295086450,"NFL GIANT $25 Double Up [Single Entry]",196672055,"2026-10-18 13:00:00",'
+          '430,141.98,"$50.00","$0.00",2758,"$25.00","$60,000.00",1200\n')
+EH_NBA = '"NBA","Classic",1,"x",2,"2026-10-18 19:00:00",5,1.0,"$0.00","$0.00",100,"$5.00","$1.00",20\n'
+EH_NAME = "draftkings-contest-entry-history.csv"
+
+
+def _eh(path, *rows):
+    path.write_text(EH_HEADER + "".join(rows or (EH_ROW,)))
+    return path
+
+
+def test_step_results_imports_entry_history_and_files_it(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)                                  # no slate snapshot, no DK_USERNAME needed
+    monkeypatch.setattr(config, "dk_username", lambda: None)
+    f = _eh(tmp_path / "Downloads" / EH_NAME, EH_ROW, EH_NBA)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "entry history" in msg and "1 new" in msg and "1 non-Classic" in msg
+    e = pd.read_parquet(tmp_path / "history" / "entries.parquet")
+    assert len(e) == 1 and e.iloc[0]["winnings"] == 50.0
+    assert not f.exists()
+    kept = list((tmp_path / "raw" / "entry_history").glob("entry-history-*.csv"))
+    assert len(kept) == 1
+    _eh(tmp_path / "Downloads" / EH_NAME)                          # same name downloaded again
+    msg2 = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "1 entries updated" in msg2
+    assert len(list((tmp_path / "raw" / "entry_history").glob("entry-history-*.csv"))) == 2
+
+
+def test_entry_history_and_standings_pair_gives_players_and_money(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _snapshot_file(tmp_path)
+    monkeypatch.setattr(config, "dk_username", lambda: "natergater24")
+    z = _standings_zip_with_me(tmp_path / "Downloads" / "contest-standings-555.zip")
+    row = EH_ROW.replace("5295086450", "2").replace("196672055", "555")
+    h = _eh(tmp_path / "Downloads" / EH_NAME, row)
+    _monday(z, h)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert "entry history" in msg and "imported 1 file" in msg
+    e = pd.read_parquet(tmp_path / "history" / "entries.parquet")
+    assert len(e) == 1 and e.iloc[0]["players"] != "" and e.iloc[0]["winnings"] == 50.0
+    assert e.iloc[0]["entry_fee"] == 25.0 and e.iloc[0]["lineup_source"] != "No standings imported"
+
+
+def test_new_results_waiting_with_only_entry_history(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    assert not run_pipeline._new_results_waiting()
+    _eh(tmp_path / "Downloads" / "draftkings-contest-entry-history (1).csv")
+    assert run_pipeline._new_results_waiting()
+
+
+def test_step_results_nothing_waiting_message(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert msg == "skipped: no new contest-standings or entry-history file"
+
+
+def test_results_file_routes_entry_history_by_content(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    f = _eh(tmp_path / "uploaded.csv")
+    msg = run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=str(f)))
+    assert "entry history" in msg and "1 new" in msg
+    assert len(pd.read_parquet(tmp_path / "history" / "entries.parquet")) == 1
+    assert not f.exists()
+
+
+def test_broken_entry_history_is_set_aside_and_reported(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    bad = tmp_path / "Downloads" / EH_NAME
+    bad.write_text('"Sport","Entry_Key","Winnings_Non_Ticket"\n"NFL",1,"$1.00"\n')
+    with pytest.raises(RuntimeError, match="Game_Type"):
+        run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    assert not bad.exists()
+    assert len(list((tmp_path / "raw" / "entry_history" / "skipped").glob("*.csv"))) == 1
+    assert not run_pipeline._new_results_waiting()
+
+
+def test_entry_history_writes_no_username(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch); _snapshot_file(tmp_path)
+    monkeypatch.setattr(config, "dk_username", lambda: "natergater24")
+    z = _standings_zip_with_me(tmp_path / "Downloads" / "contest-standings-555.zip")
+    h = _eh(tmp_path / "Downloads" / EH_NAME, EH_ROW.replace("5295086450", "2"))
+    _monday(z, h)
+    run_pipeline.step_results(dt.date(2026, 10, 19), SimpleNamespace(results_file=None))
+    for sub in ("history", "published"):
+        for p in (tmp_path / sub).rglob("*"):
+            if p.is_file():
+                data = p.read_bytes().lower()
+                assert b"natergater24" not in data, p

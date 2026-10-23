@@ -6,7 +6,9 @@ username itself is never stored or returned."""
 from __future__ import annotations
 
 import datetime as dt
+import fnmatch
 import io
+import os
 import re
 from pathlib import Path
 
@@ -29,6 +31,11 @@ TYPE_KEYWORDS = (("head-to-head", "h2h"), ("h2h", "h2h"), ("50/50", "fifty_fifty
                  ("millionaire", "large_tournament"), ("single entry", "single_entry"),
                  ("3 entry max", "single_entry"), ("3-max", "single_entry"))
 LARGE_FIELD = 20_000
+ENTRY_HISTORY_COLUMNS = ["Sport", "Game_Type", "Entry_Key", "Entry", "Contest_Key", "Contest_Date_EST", "Place",
+                         "Points", "Winnings_Non_Ticket", "Winnings_Ticket", "Contest_Entries", "Entry_Fee",
+                         "Prize_Pool", "Places_Paid"]
+ENTRY_HISTORY_GLOB = "draftkings-contest-entry-history*.csv"
+ENTRY_HISTORY_REQUIRED = ENTRY_HISTORY_COLUMNS[:12]
 _SLOT = re.compile(r"(?:^|\s)(QB|RB|WR|TE|FLEX|DST)\s+")
 _CONTEST_ID = re.compile(r"contest-standings-(\d+)")
 
@@ -146,6 +153,94 @@ def build_entry_rows(mine: pd.DataFrame, snapshot: pd.DataFrame, slate_lineups, 
             "lineup_source": lineup_source(ids, slate_lineups, my_builds, prefer=ctype),
             "typed_fields": ""})
     return _coerce(pd.DataFrame(rows, columns=ENTRY_COLUMNS)) if rows else empty_entries()
+
+
+def _header_text(source) -> str:
+    """The first line of a CSV given as text or as a path ('' if it can't be read as text)."""
+    if isinstance(source, str) and ("\n" in source or "," in source):
+        return source.split("\n", 1)[0]
+    try:
+        with open(source, "rb") as fh:
+            head = fh.read(4096)
+    except (OSError, ValueError):
+        return ""
+    if head.startswith(b"PK"):
+        return ""
+    return head.decode("utf-8-sig", errors="replace").split("\n", 1)[0]
+
+
+def find_entry_history(downloads) -> list[Path]:
+    """Entry-history downloads waiting in the Downloads folder (the name repeats, so imported files are moved
+    away). Raises PermissionError instead of looking empty."""
+    downloads = Path(downloads)
+    found = [downloads / n for n in os.listdir(downloads) if fnmatch.fnmatch(n, ENTRY_HISTORY_GLOB)]
+    return sorted(found, key=lambda p: p.stat().st_mtime)
+
+
+def is_entry_history(text_or_path) -> bool:
+    header = _header_text(text_or_path)
+    return "Entry_Key" in header and "Winnings_Non_Ticket" in header
+
+
+def _money(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series.astype(str).str.replace(r"[$,\s]", "", regex=True), errors="coerce")
+
+
+def read_entry_history(path) -> tuple[pd.DataFrame, int]:
+    df = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    df.columns = [c.strip() for c in df.columns]
+    missing = [c for c in ENTRY_HISTORY_REQUIRED if c not in df.columns]
+    if missing:
+        raise ValueError(f"This doesn't look like a DraftKings entry-history file (missing columns: {missing})")
+    keep = (df["Sport"].str.strip() == "NFL") & (df["Game_Type"].str.strip() == "Classic")
+    skipped = int((~keep).sum())
+    df = df[keep]
+    field = pd.to_numeric(df["Contest_Entries"].str.replace(",", ""), errors="coerce")
+    names = df["Entry"].str.strip()
+    won = _money(df["Winnings_Non_Ticket"]).fillna(0) + _money(df["Winnings_Ticket"]).fillna(0)
+    has_win = _money(df["Winnings_Non_Ticket"]).notna() | _money(df["Winnings_Ticket"]).notna()
+    rows = pd.DataFrame({
+        "entry_id": df["Entry_Key"].str.strip().to_numpy(),
+        "contest_id": df["Contest_Key"].str.strip().to_numpy(),
+        "slate_date": df["Contest_Date_EST"].str.strip().str[:10].to_numpy(),
+        "contest_name": names.to_numpy(),
+        "contest_type": [guess_contest_type(n, f) for n, f in zip(names, field)],
+        "entry_fee": _money(df["Entry_Fee"]).to_numpy(),
+        "winnings": won.where(has_win).to_numpy(),
+        "place": pd.to_numeric(df["Place"].str.replace(",", ""), errors="coerce").to_numpy(),
+        "field_size": field.to_numpy(),
+        "points": pd.to_numeric(df["Points"], errors="coerce").to_numpy(),
+        "players": "", "projected": np.nan, "lineup_source": "No standings imported", "typed_fields": ""})
+    return _coerce(rows), skipped
+
+
+def merge_entry_history(path, rows: pd.DataFrame) -> pd.DataFrame:
+    """Upsert entry-history rows by entry_id. DraftKings' own fee and winnings beat anything typed; typed name and
+    type are kept; lineup fields (players, projected, lineup_source) are never touched."""
+    stored = load_entries(path).to_dict("records")
+    index = {str(r["entry_id"]): i for i, r in enumerate(stored)}
+    for rec in _coerce(rows).to_dict("records"):
+        i = index.get(str(rec["entry_id"]))
+        if i is None:
+            stored.append(rec)
+            index[str(rec["entry_id"])] = len(stored) - 1
+            continue
+        cur = stored[i]
+        typed = set(filter(None, str(cur.get("typed_fields") or "").split(",")))
+        for c in ("entry_fee", "winnings"):
+            if not _blank(rec.get(c)):
+                cur[c] = rec[c]
+                typed.discard(c)
+        for c in ("place", "points", "field_size", "contest_id"):
+            if not _blank(rec.get(c)):
+                cur[c] = rec[c]
+        for c in ("contest_name", "contest_type"):
+            if c not in typed and _blank(cur.get(c)) and not _blank(rec.get(c)):
+                cur[c] = rec[c]
+        cur["typed_fields"] = ",".join(sorted(typed))
+    out = _coerce(pd.DataFrame(stored, columns=ENTRY_COLUMNS)) if stored else empty_entries()
+    atomic_write_parquet(out, path)
+    return out
 
 
 def _blank(v) -> bool:

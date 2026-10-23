@@ -54,8 +54,13 @@ An entry made from any of the slate's builds (Thursday, Sunday 9:00 or Sunday 11
 later rebuild changed the lineup. If the app saw that contest in the DraftKings lobby, the entry fee and contest
 name fill in too. If it can't tell the contest type, the entry shows **Type not set**.
 
-**Winnings (Mac only).** DraftKings' standings don't include them, so type them in: open the entry, fill the boxes
-(winnings, and entry fee or contest type if they're blank), then **Save**. Only the boxes you change are saved; a
+**Fees and winnings.** Download your **entry history** from DraftKings (`draftkings-contest-entry-history.csv`, from
+the same My Contests page's history view). It imports by itself from Downloads, in either order with the standings,
+and fills in fee, winnings, place and points for every NFL Classic entry. DraftKings' numbers replace anything you
+typed for fee and winnings.
+
+**Typing winnings (Mac only, the fallback).** If you don't have the entry history yet, open the entry, fill the
+boxes (winnings, and entry fee or contest type if they're blank), then **Save**. Only the boxes you change are saved; a
 blank fee or a **Type not set** you leave alone stays blank. If saving worked but the phone copy couldn't be
 updated, you'll see a yellow warning instead of the green "Saved". A 💲 marks entries still waiting on winnings.
 For a contest you didn't export, use **➕ Add entry by hand**.
