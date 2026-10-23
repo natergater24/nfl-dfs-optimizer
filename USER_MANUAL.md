@@ -11,7 +11,8 @@ Run these in Terminal, in the NFL_DFS folder:
 4. Stay logged in on the Mac and keep it plugged in — scheduled runs only happen while you're logged in.
 5. For My Results, add one line to `env.txt`: `DK_USERNAME=<your DraftKings username>`. The app shows a reminder
    in the sidebar if it's missing. The username stays on your Mac and is never published.
-6. The Mac app keeps the Mac awake while it's open. Quit it when you're done: **Ctrl+C** in its Terminal
+6. The NBA schedule (2:00 PM and 6:30 PM ET) is installed by the same `bash scripts/install_schedule.sh`.
+7. The Mac app keeps the Mac awake while it's open. Quit it when you're done: **Ctrl+C** in its Terminal
    window, or run `pkill -f "streamlit run app.py"`.
 
 ## What happens automatically each week
@@ -85,6 +86,22 @@ them to your phone); actual ownership fills in after a standings import.
 the previous September.
 
 **On your phone** My Results is read-only and says "Edit on your Mac".
+
+## 🏀 NBA
+Use the 🏈 / 🏀 pages in the left-hand menu to switch sports. The 🏀 NBA page works like the NFL one.
+- **Automatic builds:** every NBA day at **2:00 PM** and **6:30 PM ET** your Mac pulls DraftKings salaries,
+  injuries and Vegas lines, builds the lineups, and publishes them to your phone. On days with no NBA slate
+  nothing runs. Keep the Mac plugged in with the lid open at those times.
+- **Slate picker:** the page opens on the next slate that hasn't started. Choose Main, Night or Late Night.
+- **⭐ Recommended:** the best lineup for the slate, with swap suggestions. ▲ means the swap scores better,
+  ▼ means it scores worse. Click **Download** to get the CSV for DraftKings.
+- **🛠 My Lineup:** build your own. Slots are PG, SG, SF, PF, C, **G** (a PG or SG), **F** (an SF or PF) and
+  **UTIL** (anyone).
+- **🔁 Tweak & Rebuild:** exclude or lock players and rebuild, same as the NFL page.
+- **Injuries:** players listed Out are left out. Questionable / Game-Time Decision players are flagged. If you
+  lock a player who is Out, your lock wins and the page shows a ⚠.
+- **Late news:** on the Mac, click **⟳ Refresh NBA now**.
+- NBA results tracking comes in a later phase.
 
 ## If a scheduled run was missed
 - **Best setup on run mornings (Tue/Thu/Sun):** Mac plugged in, or at least with the lid open. Each run keeps the

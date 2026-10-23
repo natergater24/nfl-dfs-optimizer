@@ -166,3 +166,18 @@ Downloads/draftkings-contest-entry-history*.csv, runs it AFTER standings, then m
 raw/entry_history/entry-history-<timestamp>.csv (bad file -> raw/entry_history/skipped, reported like a bad standings
 file). _new_results_waiting covers both kinds; --results-file routes by header. Needs no DK_USERNAME or slate snapshot.
 Sidebar guide and upload label updated; USER_MANUAL/README updated.
+
+=== 2026-10-23: NBA phase 1 (branch nba-phase1) ===
+Spec docs/superpowers/specs/2026-10-23-nba-optimizer-design.md; plan docs/superpowers/plans/2026-10-23-nba-phase1.md.
+Code: nbadfs/ (data pull, projections/minutes, sims, ownership, optimizer, publish), nbadfs_app/ (page helpers),
+nba_page.py (Streamlit NBA page), run_pipeline.py stage "nba", LaunchAgents scripts/launchagents/com.nfldfs.nba_*.plist.template.
+Published layout: data/published/nba/slates.json + <draft_group_id>/{pool,lineups,swaps}.parquet, field.npy (row
+indices), build_meta.json; nba/run_status.json. Sims are NOT published: the app regenerates them deterministically
+from pool row order + n_sims + seed (keeps the repo small).
+Stage "nba": per-slate isolation (one slate failing doesn't stop others); odds fetch skipped when <60 min to
+the slate's first game; no slate today = no-op. LaunchAgents nba_afternoon 14:00 and nba_evening 18:30 (ET).
+DK Status "OUT" normalized to "O". Data sources: DK lobby ContestTypeId 70 (NBA Classic), Odds API basketball_nba
+(2 credits per run), sportsdataverse ESPN season stats; stats.nba.com / cdn.nba.com unusable.
+Builder component: eligibility now passed from Python (NFL unchanged).
+OUTSTANDING: phase 2 (grayed started games, refresh warning, late-swap clock marker) and phase 3 (NBA My Results).
+Calibration to watch: ownership looks chalk-heavy; minutes capped at 40 after Out redistribution.

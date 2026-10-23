@@ -54,3 +54,11 @@ Request (approved by Nathan in chat)
 - New My Results tab: contest entries (place, points, lineup source, winnings typed on the Mac) built from exported
   standings, plus a per-player history search. Phone is read-only; DK_USERNAME in env.txt, never published.
 - Built on branch my-results; docs in USER_MANUAL, README, claude-context. Real-file check pending after Sunday.
+
+SESSION LOG - 2026-10-23 (NBA phase 1)
+
+Request (approved by Nathan in chat)
+- Add an NBA page (DraftKings Classic) beside NFL: slate picker (Main / Night / Late Night), Recommended lineup
+  with swaps, My Lineup, Tweak & Rebuild; automatic builds at 2:00 PM and 6:30 PM ET on NBA days.
+- Built on branch nba-phase1 from docs/superpowers/specs/2026-10-23-nba-optimizer-design.md; docs in USER_MANUAL,
+  README, claude-context. Phase 2 (started-game handling) and phase 3 (NBA My Results) still to do.

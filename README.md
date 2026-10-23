@@ -31,6 +31,12 @@ The `tuesday` stage fills nflverse actual points and publishes them. Season filt
 belong to the prior season). Unknown contest types show "Type not set". Spec:
 `docs/superpowers/specs/2026-10-16-my-results-design.md`.
 
+## NBA (phase 1)
+The 🏀 NBA page builds DraftKings Classic NBA lineups for each slate (Main / Night / Late Night): player pool,
+Recommended lineup with swaps, My Lineup builder and Tweak & Rebuild. It runs automatically at 2:00 PM and
+6:30 PM ET on NBA days: `./py run_pipeline.py --stage nba`. Spec: `docs/superpowers/specs/2026-10-23-nba-optimizer-design.md`.
+NBA results tracking is a later phase.
+
 ## How it works
 Spec: `docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md`.
 Vegas implied totals → expected team volume → player shares → 10,000 correlated game
