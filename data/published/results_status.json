@@ -11,5 +11,6 @@
       "ok": true,
       "message": "entry history: 1 entries updated, 0 new"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }

@@ -1,0 +1,13 @@
+{
+  "n_sims": 10000,
+  "seed": 20261023,
+  "stats_match_rate": 0.9473684210526315,
+  "sims_fingerprint": "4ef8e0e3a6a74e32ba3a29d1abeb83348df31b31b9a7588d58d7827b861defc0",
+  "built_at_utc": "2026-10-23T21:19:33+00:00",
+  "draft_group_id": 155553,
+  "name": "Night",
+  "start": "2026-10-23T21:30:00",
+  "games": 5,
+  "odds_remaining": "461",
+  "slate_date": "2026-10-23"
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "draft_group_id": 155547,
+    "name": "Main",
+    "start": "2026-10-23T19:00:00",
+    "games": 6,
+    "published": true
+  },
+  {
+    "draft_group_id": 155553,
+    "name": "Night",
+    "start": "2026-10-23T21:30:00",
+    "games": 5,
+    "published": true
+  },
+  {
+    "draft_group_id": 155557,
+    "name": "Late Night",
+    "start": "2026-10-23T22:00:00",
+    "games": 3,
+    "published": true
+  }
+]
