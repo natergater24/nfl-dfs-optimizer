@@ -7,6 +7,7 @@
   ./py run_pipeline.py --stage sunday_late fresh salaries + (stale) Vegas + build + publish
   ./py run_pipeline.py --stage refresh     salaries + (missing) stats + (stale) Vegas + build + publish
   ./py run_pipeline.py --stage results     import a DraftKings standings file, report card, publish
+  ./py run_pipeline.py --stage nba         NBA: today's DraftKings Classic slates + Vegas + build + publish (daily)
   ./py run_pipeline.py --stage build       rebuild from what's already downloaded
   (thursday and sunday also publish when they finish)
   add --salary-csv PATH to use a manually downloaded DKSalaries.csv
@@ -26,6 +27,11 @@ from pathlib import Path
 
 import pandas as pd
 
+import nbadfs.build
+import nbadfs.config as nba_config
+from nbadfs import dk as nba_dk
+from nbadfs import stats as nba_stats
+from nbadfs import vegas as nba_vegas
 from nfldfs import (build, config, dk_salaries, entries, nfl_stats, ownership, player_history, publish, results,
                     team_env, vegas)
 from nfldfs.build import write_published
@@ -396,6 +402,103 @@ def _new_results_waiting() -> bool:
         return True                           # let step_results record the error (e.g. PermissionError) loudly
 
 
+# ── NBA (separate files under data/*/nba; shares the pipeline lock) ──────────────────────────────────────
+NO_NBA_SLATE = "skipped: no NBA Classic slate today"
+
+
+def _nba_today(args, today) -> dt.date:
+    """The slate date is the America/New_York date (the machine clock may be elsewhere)."""
+    if args.today:
+        return today
+    return dt.datetime.now(nba_vegas.ET).date()
+
+
+def nba_season_years(day: dt.date) -> tuple[int, int]:
+    """(current, last) season end years: the season ending next calendar year from July on."""
+    cur = day.year + 1 if day.month >= 7 else day.year
+    return cur, cur - 1
+
+
+def _nba_slates() -> list[dict]:
+    p = nba_config.PROCESSED_NBA / "slates.json"
+    return json.loads(p.read_text()) if p.exists() else []
+
+
+def _nba_salary_path(day: dt.date, dg) -> Path:
+    return nba_config.RAW_NBA / day.isoformat() / f"salaries_{dg}.csv"
+
+
+def step_nba_salaries(today, args) -> str:
+    day = _nba_today(args, today)
+    slates = nba_dk.classic_slates(nba_dk.fetch_lobby(), day)
+    for s in slates:
+        atomic_write_text(_nba_salary_path(day, s["draft_group_id"]), nba_dk.fetch_salary_csv(s["draft_group_id"]))
+    atomic_write_text(nba_config.PROCESSED_NBA / "slates.json", json.dumps(slates, indent=2))
+    if not slates:
+        atomic_write_text(nba_config.PUBLISHED_NBA / "slates.json", "[]")
+        return NO_NBA_SLATE
+    return f"{len(slates)} NBA Classic slate(s): " + ", ".join(f"{s['name']} ({s['games']} games)" for s in slates)
+
+
+def _nba_odds_path() -> Path:
+    return nba_config.PROCESSED_NBA / "odds.json"
+
+
+def step_nba_vegas_if_stale(today, args) -> str:
+    if not _nba_slates():
+        return NO_NBA_SLATE
+    path = _nba_odds_path()
+    now = dt.datetime.now()
+    if nba_vegas.lines_fresh(path, now, nba_config.ODDS_MAX_AGE_MIN):
+        age = (now.timestamp() - path.stat().st_mtime) / 60
+        return f"skipped: lines fetched {age:.0f} min ago"
+    events, remaining = nba_vegas.fetch_odds(config.odds_api_key())
+    atomic_write_text(path, json.dumps({"fetched_at": _now(), "requests_remaining": remaining, "events": events}))
+    return f"{len(events)} NBA games listed; Odds API requests remaining: {remaining}"
+
+
+def step_nba_stats_if_missing(today, args) -> str:
+    if not _nba_slates():
+        return NO_NBA_SLATE
+    cur, last = nba_season_years(_nba_today(args, today))
+    for y in (cur, last):
+        nba_stats.download_season(y, nba_config.RAW_NBA / "stats")
+    return f"season stats {last} and {cur} ready"
+
+
+def _nba_rates(year: int) -> pd.DataFrame:
+    return nba_stats.player_rates(pd.read_parquet(nba_config.RAW_NBA / "stats" / f"player_season_stats_{year}.parquet"))
+
+
+def step_nba_build(today, args) -> str:
+    slates = _nba_slates()
+    if not slates:
+        return NO_NBA_SLATE
+    day = _nba_today(args, today)
+    odds_p = _nba_odds_path()
+    odds = json.loads(odds_p.read_text()) if odds_p.exists() else {"events": [], "requests_remaining": None}
+    lines = nba_vegas.team_lines(odds["events"], day)
+    cur, last = nba_season_years(day)
+    rates_cur, rates_last = _nba_rates(cur), _nba_rates(last)
+    flags, warnings, built = [], "", 0
+    for s in slates:
+        dg = s["draft_group_id"]
+        try:
+            res = nbadfs.build.build_slate(_nba_salary_path(day, dg).read_text(encoding="utf-8-sig"), lines,
+                                           rates_last, rates_cur)
+            res["meta"].update(draft_group_id=dg, name=s["name"], start=s["start"], games=s["games"],
+                               odds_remaining=odds.get("requests_remaining"))
+            nbadfs.build.write_published(res, nba_config.PUBLISHED_NBA / str(dg))
+            flags.append({**s, "published": True})
+            built += 1
+        except Exception as e:
+            log.exception("NBA slate %s failed", s["name"])
+            warnings += f"; WARNING: {s['name']} not built ({type(e).__name__})"
+            flags.append({**s, "published": False})
+    atomic_write_text(nba_config.PUBLISHED_NBA / "slates.json", json.dumps(flags, indent=2))
+    return f"{built} of {len(slates)} NBA slate(s) built{warnings}"
+
+
 def step_publish(today, args) -> str:
     return publish.publish(config.ROOT, ["data/published", "data/history"], f"Slate update: {args.stage} {today}")
 
@@ -408,12 +511,15 @@ STAGES = {
     "refresh": ["salaries", "stats_if_missing", "vegas_if_stale", "build", "publish"],
     "results": ["results", "publish"],
     "build": ["build"],
+    "nba": ["nba_salaries", "nba_vegas_if_stale", "nba_stats_if_missing", "nba_build", "publish"],
 }
 STEP_FUNCS = {
     "salaries": step_salaries, "salaries_if_stale": step_salaries_if_stale,
     "stats": step_stats, "stats_if_missing": step_stats_if_missing,
     "vegas": step_vegas, "vegas_if_stale": step_vegas_if_stale, "build": step_build,
     "results": step_results, "publish": step_publish,
+    "nba_salaries": step_nba_salaries, "nba_vegas_if_stale": step_nba_vegas_if_stale,
+    "nba_stats_if_missing": step_nba_stats_if_missing, "nba_build": step_nba_build,
 }
 
 
@@ -465,8 +571,11 @@ def _run(args, today) -> int:
     if args.stage == "results" and not args.results_file and not _new_results_waiting():
         log.info("results: no new contest-standings or entry-history file — nothing to do")   # keep the last import's status
         return 0
-    status_file = "results_status.json" if args.stage == "results" else "run_status.json"
-    status = RunStatus(config.PUBLISHED / status_file, args.stage)
+    if args.stage == "nba":                   # NBA never touches the NFL run_status.json
+        status_path = nba_config.PUBLISHED_NBA / "run_status.json"
+    else:
+        status_path = config.PUBLISHED / ("results_status.json" if args.stage == "results" else "run_status.json")
+    status = RunStatus(status_path, args.stage)
     ok = True
     steps = STAGES[args.stage]
     for name in [n for n in steps if n != "publish"]:

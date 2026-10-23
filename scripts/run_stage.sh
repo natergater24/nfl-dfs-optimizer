@@ -12,7 +12,7 @@ cd "$PROJECT" || exit 1
 # works on power. A closed lid on battery still forces sleep, so keep the lid open or the Mac plugged in.
 case "$STAGE" in
     sunday)                      KEEP_AWAKE=11700 ;;  # 9:00 through the 11:45 run (3h15m)
-    tuesday|thursday|sunday_late) KEEP_AWAKE=5400 ;;   # 90 minutes; a normal run takes a few
+    tuesday|thursday|sunday_late|nba) KEEP_AWAKE=5400 ;;   # 90 minutes; a normal run takes a few
     *)                           KEEP_AWAKE=0 ;;
 esac
 if [ "$KEEP_AWAKE" -gt 0 ]; then

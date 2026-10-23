@@ -47,5 +47,16 @@ def test_scheduled_stages_declare_user_active():
     # Without -u a battery dark wake goes back to sleep mid-run (Oct 2026: builds took hours).
     text = (ROOT / "scripts/run_stage.sh").read_text()
     assert "caffeinate -dimsu" in text
-    for stage in ("sunday)", "tuesday|thursday|sunday_late)"):
+    for stage in ("sunday)", "tuesday|thursday|sunday_late|nba)"):
         assert stage in text
+
+
+def test_nba_agents_daily():
+    for name, (h, m) in {"nba_afternoon": (14, 0), "nba_evening": (18, 30)}.items():
+        p = _render(name)
+        assert p["Label"] == f"com.nfldfs.{name}"
+        assert p["ProgramArguments"] == ["/bin/bash", "/p/scripts/run_stage.sh", "nba"]
+        sci = p["StartCalendarInterval"]
+        assert "Weekday" not in sci and (sci["Hour"], sci["Minute"]) == (h, m)
+    keep = [l for l in (ROOT / "scripts/run_stage.sh").read_text().splitlines() if "KEEP_AWAKE=5400" in l][0]
+    assert "nba" in keep.split(")")[0].split("|")
