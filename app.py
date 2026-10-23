@@ -80,7 +80,7 @@ if not hosted and top[3].button("⟳ Refresh data now", width="stretch", key="re
     st.rerun()
 
 view_sidebar.render(d, hosted)
-tab_rec, tab_mine, tab_pool, tab_res = st.tabs(["⭐ Recommended", "🛠 My Lineup", "📋 Player pool", "📒 My Results"])
+tab_rec, tab_mine, tab_pool, tab_res = st.tabs(["⭐ Recommended", "🛠 My Lineup", "🔁 Tweak & Rebuild", "📒 My Results"])
 with tab_rec:
     view_recommended.render(d, key, label, field_scores)
 with tab_mine:

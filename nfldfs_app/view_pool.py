@@ -1,4 +1,4 @@
-"""📋 Player pool tab: every playable player, locks/excludes, and Rebuild with my locks."""
+"""🔁 Tweak & Rebuild tab: lock or exclude players, rebuild the lineup, and browse every playable player."""
 from __future__ import annotations
 
 import streamlit as st
@@ -30,12 +30,8 @@ def rebuild(d, key, locks, excludes):
 
 
 def render(d, key, label, field_scores):
-    f = st.columns(3)
-    pos = f[0].multiselect("Position", POSITIONS, default=POSITIONS, key="pool_pos")
-    tiers = f[1].multiselect("Ownership tier", list(ui.TIER_ICON), default=list(ui.TIER_ICON), key="pool_tiers")
-    sort = f[2].selectbox("Sort by", list(SORTS), key="pool_sort")
-    st.dataframe(ui.styled_pool(pool_view(d.pool, pos, tiers, sort)), hide_index=True, width="stretch", height=480)
-
+    st.caption(f"Don't like someone in the recommended {label} lineup (an injury, a hunch)? Exclude that player, or lock in "
+               "a player you want, then rebuild. The app re-picks the other spots around your choices.")
     play = d.pool[d.pool["playable"]].sort_values("salary", ascending=False)
     names = {f"{r['name']} · {r.position} · {r.team} · {ui.money(r.salary)}": int(r.dk_id) for _, r in play.iterrows()}
     c = st.columns(2)
@@ -62,3 +58,10 @@ def render(d, key, label, field_scores):
             st.session_state.my_ids = rb["ids"]
             st.session_state.flash = (True, "Copied into 🛠 My Lineup")
             st.rerun()                          # the 🛠 tab rendered earlier this run; redraw it with the new ids
+
+    st.subheader("All players")
+    f = st.columns(3)
+    pos = f[0].multiselect("Position", POSITIONS, default=POSITIONS, key="pool_pos")
+    tiers = f[1].multiselect("Ownership tier", list(ui.TIER_ICON), default=list(ui.TIER_ICON), key="pool_tiers")
+    sort = f[2].selectbox("Sort by", list(SORTS), key="pool_sort")
+    st.dataframe(ui.styled_pool(pool_view(d.pool, pos, tiers, sort)), hide_index=True, width="stretch", height=480)

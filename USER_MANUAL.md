@@ -37,6 +37,15 @@ Your Mac must be plugged in. It wakes itself 5 minutes before each run.
 - Or drag a player onto a slot. On a phone, tap instead of dragging.
 - The salary bar turns red over $50,000 and the download button turns off until you fix it.
 
+## Tweaking the recommended lineup (🔁 Tweak & Rebuild)
+Use this when news breaks or you have a hunch, e.g. a recommended player is questionable with an injury.
+- Pick the contest type at the top as usual.
+- **✖ Exclude players:** anyone you don't want. **🔒 Lock players:** anyone you must have.
+- Click **🔁 Rebuild … lineup with my locks**. It re-picks the other spots around your choices in a few seconds
+  (it works on the phone too).
+- **Send to 🛠 My Lineup** copies the new lineup there to fine-tune or download for DraftKings.
+- The full list of players (filters and sort) is below, under **All players**.
+
 ## What the colors and labels mean
 Open **ℹ️ Key** in the app. Short version: 🔥 Chalk = most people have him; 💎 Contrarian = few do.
 Green matchup = soft defense, red = tough defense.

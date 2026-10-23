@@ -94,7 +94,7 @@ OUTSTANDING
 === 2026-10-12: Plan 2 (app, publishing, schedule, results import) ===
 Branch `app`. 189 tests pass.
 - App modules: app.py + nfldfs_app/ (Streamlit): header and hosted banner, Key, Recommended lineup, outliers,
-  My Lineup builder (click / click / drag swaps), Player pool tab (locks, excludes, rebuild), report card,
+  My Lineup builder (click / click / drag swaps), 🔁 Tweak & Rebuild tab (formerly Player pool: locks, excludes, rebuild, all players), report card,
   sidebar (status, results import guide, local actions). Local: `bash launch.sh` -> http://localhost:8502.
 - Stages: tuesday, thursday, sunday, sunday_late, refresh, results, build.
 - Publish flow: runs after the run status is finalized, also after failures, so the hosted banner sees failures.
