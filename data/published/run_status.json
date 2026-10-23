@@ -32,5 +32,6 @@
       "ok": true,
       "message": "9 contest types built; name match rate 82%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Ben Mann, Brennan Presley, CJ Daniels, CJ Dippre"
     }
-  ]
+  ],
+  "publish": "WARNING: push to GitHub failed \u2014 fatal: unable to access 'https://github.com/natergater24/nfl-dfs-optimizer.git/': Could not resolve host: github.com (the local app still works)"
 }
