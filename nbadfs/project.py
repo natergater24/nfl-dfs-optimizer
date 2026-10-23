@@ -13,6 +13,7 @@ POOL_COLUMNS = BASE_COLUMNS + ["minutes", "rate", "implied_total", "opp_implied"
 PRIOR_GAMES = 8.0
 MAX_MINUTES = 40.0
 VEGAS_CLIP = (0.85, 1.15)
+DEFAULT_IMPLIED = 112.0            # league-default implied team total when no Vegas lines exist at all
 
 
 def _blend(cur, last, w):
@@ -58,15 +59,18 @@ def project(pool: pd.DataFrame, lines: pd.DataFrame, matched: pd.DataFrame) -> p
     has_stats = ~np.isnan(rate)
 
     # Vegas: league-average implied total, per-team scaling
-    lg = float(lines["implied_total"].mean()) if len(lines) else np.nan
-    by_team = lines.drop_duplicates("team").set_index("team") if len(lines) else lines
-    imp = df["team"].map(by_team["implied_total"]) if len(lines) else pd.Series(np.nan, index=df.index)
-    opp_imp = df["team"].map(by_team["opp_implied"]) if len(lines) else pd.Series(np.nan, index=df.index)
+    has_lines = len(lines) > 0 and lines["implied_total"].notna().any()
+    lg = float(lines["implied_total"].mean()) if has_lines else DEFAULT_IMPLIED
+    if has_lines:
+        by_team = lines.drop_duplicates("team").set_index("team")
+        imp, opp_imp = df["team"].map(by_team["implied_total"]), df["team"].map(by_team["opp_implied"])
+    else:
+        imp = opp_imp = pd.Series(np.nan, index=df.index)
     missing = imp.isna().to_numpy()
     df["implied_total"] = imp.fillna(lg).to_numpy(dtype=float)
     df["opp_implied"] = opp_imp.fillna(lg).to_numpy(dtype=float)
     df["line_missing"] = missing
-    scale = np.clip(df["implied_total"].to_numpy() / lg, *VEGAS_CLIP) if lg == lg and lg > 0 else np.ones(len(df))
+    scale = np.clip(df["implied_total"].to_numpy() / lg, *VEGAS_CLIP)
 
     playable = df["playable"].to_numpy(dtype=bool)
     minutes = _redistribute(df.assign(playable=playable), np.where(has_stats, minutes, np.nan))

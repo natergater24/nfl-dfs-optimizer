@@ -66,3 +66,13 @@ def test_rookie_and_unmatched_baselines():
     assert out.loc[0, "median"] == pytest.approx(18.0) and out.loc[0, "minutes"] == 0
     assert out.loc[1, "median"] == pytest.approx(25.0)
     assert list(out.columns) == P.POOL_COLUMNS
+
+
+def test_no_lines_at_all_uses_default():
+    base = dict(games_cur=20.0, min_cur=30.0, rate_cur=1.0)
+    empty = pd.DataFrame(columns=["team", "opp", "total", "spread", "implied_total", "opp_implied"])
+    out = _go([_row(1, "A", "AAA", ["PG"], **base), _row(2, "B", "BBB", ["PG"], **base)], empty)
+    assert P.DEFAULT_IMPLIED == 112.0
+    assert (out["implied_total"] == 112.0).all() and (out["opp_implied"] == 112.0).all()
+    assert out["line_missing"].all()
+    assert out.loc[0, "median"] == pytest.approx(30.0)
