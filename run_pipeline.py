@@ -431,13 +431,22 @@ def _nba_salary_path(day: dt.date, dg) -> Path:
 def step_nba_salaries(today, args) -> str:
     day = _nba_today(args, today)
     slates = nba_dk.classic_slates(nba_dk.fetch_lobby(), day)
+    warnings, ok = "", []
     for s in slates:
-        atomic_write_text(_nba_salary_path(day, s["draft_group_id"]), nba_dk.fetch_salary_csv(s["draft_group_id"]))
+        try:
+            atomic_write_text(_nba_salary_path(day, s["draft_group_id"]), nba_dk.fetch_salary_csv(s["draft_group_id"]))
+            ok.append(s)
+        except Exception as e:
+            s["downloaded"] = False               # stays listed (published false) so the app knows it exists
+            warnings += f"; WARNING: {s['name']} salaries not downloaded ({type(e).__name__})"
     atomic_write_text(nba_config.PROCESSED_NBA / "slates.json", json.dumps(slates, indent=2))
     if not slates:
         atomic_write_text(nba_config.PUBLISHED_NBA / "slates.json", "[]")
         return NO_NBA_SLATE
-    return f"{len(slates)} NBA Classic slate(s): " + ", ".join(f"{s['name']} ({s['games']} games)" for s in slates)
+    if slates and not ok:
+        raise RuntimeError("no NBA salary file could be downloaded" + warnings)
+    return (f"{len(slates)} NBA Classic slate(s): " + ", ".join(f"{s['name']} ({s['games']} games)" for s in slates)
+            + warnings)
 
 
 def _nba_odds_path() -> Path:
@@ -452,7 +461,10 @@ def step_nba_vegas_if_stale(today, args) -> str:
     if nba_vegas.lines_fresh(path, now, nba_config.ODDS_MAX_AGE_MIN):
         age = (now.timestamp() - path.stat().st_mtime) / 60
         return f"skipped: lines fetched {age:.0f} min ago"
-    events, remaining = nba_vegas.fetch_odds(config.odds_api_key())
+    try:
+        events, remaining = nba_vegas.fetch_odds(config.odds_api_key())
+    except Exception as e:                        # lines are optional: build with cached odds, or league-average
+        return f"WARNING: NBA lines not refreshed ({type(e).__name__})"
     atomic_write_text(path, json.dumps({"fetched_at": _now(), "requests_remaining": remaining, "events": events}))
     return f"{len(events)} NBA games listed; Odds API requests remaining: {remaining}"
 
@@ -483,6 +495,9 @@ def step_nba_build(today, args) -> str:
     flags, warnings, built = [], "", 0
     for s in slates:
         dg = s["draft_group_id"]
+        if s.get("downloaded") is False:
+            flags.append({**s, "published": False})
+            continue
         try:
             res = nbadfs.build.build_slate(_nba_salary_path(day, dg).read_text(encoding="utf-8-sig"), lines,
                                            rates_last, rates_cur)

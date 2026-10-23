@@ -12,7 +12,7 @@ from nfldfs.status import atomic_save_npy, atomic_write_parquet, atomic_write_te
 
 from .config import FIELD_SIZE, N_SIMS, SEED
 from .dk import parse_salaries
-from .lineups import build_all
+from .lineups import N_CANDIDATES, build_all
 from .ownership import add_ownership, sample_field
 from .project import project
 from .simulate import simulate, summarize
@@ -22,7 +22,8 @@ PUBLISHED_FILES = ["pool.parquet", "lineups.parquet", "swaps.parquet", "field.np
 
 
 def build_slate(salaries_text: str, lines: pd.DataFrame, rates_last: pd.DataFrame, rates_cur: pd.DataFrame, *,
-                n_sims: int = N_SIMS, seed: int = SEED, field_size: int = FIELD_SIZE) -> dict:
+                n_sims: int = N_SIMS, seed: int = SEED, field_size: int = FIELD_SIZE,
+                n_candidates: int = N_CANDIDATES) -> dict:
     """Returns pool (row order == the order `simulate` saw), sims (not published), lineups, swaps, field, meta."""
     base = parse_salaries(salaries_text)
     matched, match_rate = match_rates(base, rates_last, rates_cur)
@@ -30,7 +31,7 @@ def build_slate(salaries_text: str, lines: pd.DataFrame, rates_last: pd.DataFram
     sims = simulate(proj, n_sims, seed)
     pool = add_ownership(summarize(sims, proj))
     field = sample_field(pool, field_size, np.random.default_rng(seed)).astype(np.int32)
-    lineups, swaps = build_all(pool, sims, field, seed=seed)
+    lineups, swaps = build_all(pool, sims, field, n_candidates=n_candidates, seed=seed)
     meta = {"n_sims": int(n_sims), "seed": int(seed), "stats_match_rate": float(match_rate),
             "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
     return {"pool": pool, "sims": sims, "lineups": lineups, "swaps": swaps, "field": field, "meta": meta}

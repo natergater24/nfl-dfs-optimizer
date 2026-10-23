@@ -615,8 +615,14 @@ def nba_env(tmp_path, monkeypatch):
     monkeypatch.setattr(run_pipeline, "_nba_rates", lambda y: run_pipeline.nba_stats.player_rates(sample[sample.season == y]))
     import nbadfs.build as nb
     real = nb.build_slate
-    monkeypatch.setattr(nb, "build_slate", lambda *a, **k: real(*a, **{**k, "n_sims": 300, "field_size": 150}))
+    monkeypatch.setattr(nb, "build_slate", lambda *a, **k: real(*a, **{**k, "n_sims": 200, "field_size": 100, "n_candidates": 3}))
     return tmp_path, calls
+
+
+def _one_slate(monkeypatch):
+    lobby = json.loads((FIXD / "nba_lobby_sample.json").read_text())
+    lobby["DraftGroups"] = [g for g in lobby["DraftGroups"] if g["DraftGroupId"] == 155547]
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_lobby", lambda: lobby)
 
 
 def _status(tmp_path):
@@ -636,6 +642,7 @@ def test_nba_stage_noop_without_slates(nba_env, monkeypatch):
 
 def test_nba_off_day_after_a_game_day_leaves_old_folder_but_empties_slates(nba_env, monkeypatch):
     tmp_path, calls = nba_env
+    _one_slate(monkeypatch)
     assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
     assert (tmp_path / "published" / "nba" / "155547" / "pool.parquet").exists()
     assert run_pipeline.main(["--stage", "nba", "--today", "2026-10-25"]) == 0   # no slates that day
@@ -677,8 +684,10 @@ def test_one_slate_failure_does_not_stop_others(nba_env, monkeypatch):
     assert (tmp_path / "published" / "nba" / "155557" / "pool.parquet").exists()
 
 
-def test_nba_odds_skip_when_fresh(nba_env):
+def test_nba_odds_skip_when_fresh(nba_env, monkeypatch):
     tmp_path, calls = nba_env
+    _one_slate(monkeypatch)
+    monkeypatch.setitem(run_pipeline.STEP_FUNCS, "nba_build", lambda t, a: "stub")
     assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
     assert calls["odds"] == 1
     assert "480" in [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_vegas_if_stale"][0]["message"]
@@ -695,3 +704,43 @@ def test_nba_season_years():
     assert run_pipeline.nba_season_years(dt.date(2026, 10, 23)) == (2027, 2026)
     assert run_pipeline.nba_season_years(dt.date(2027, 3, 1)) == (2027, 2026)
     assert run_pipeline.nba_season_years(dt.date(2027, 7, 1)) == (2028, 2027)
+
+
+def test_salary_download_failure_skips_only_that_slate(nba_env, monkeypatch):
+    tmp_path, calls = nba_env
+    real = run_pipeline.nba_dk.fetch_salary_csv
+
+    def flaky(dg):
+        if dg == 155553:
+            raise RuntimeError("blocked")
+        return real(dg)
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_salary_csv", flaky)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    steps = {s["name"]: s["message"] for s in _status(tmp_path)["steps"]}
+    assert "salaries not downloaded (RuntimeError)" in steps["nba_salaries"]
+    slates = json.loads((tmp_path / "published" / "nba" / "slates.json").read_text())
+    assert [s["published"] for s in slates] == [True, False, True]
+    assert steps["nba_build"].startswith("2 of 3")
+
+
+def test_all_salary_downloads_failing_fails_the_step(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+
+    def boom(dg):
+        raise RuntimeError("blocked")
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_salary_csv", boom)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 1
+    assert _status(tmp_path)["ok"] is False
+
+
+def test_odds_failure_does_not_stop_the_stage(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    _one_slate(monkeypatch)
+
+    def boom(key):
+        raise RuntimeError("quota")
+    monkeypatch.setattr(run_pipeline.nba_vegas, "fetch_odds", boom)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    steps = {s["name"]: s["message"] for s in _status(tmp_path)["steps"]}
+    assert "WARNING: NBA lines not refreshed (RuntimeError)" in steps["nba_vegas_if_stale"]
+    assert steps["nba_build"].startswith("1 of 1")

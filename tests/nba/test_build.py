@@ -21,7 +21,7 @@ def _inputs():
 
 
 def test_build_slate_end_to_end(tmp_path):
-    res = B.build_slate(*_inputs(), n_sims=400, seed=7, field_size=200)
+    res = B.build_slate(*_inputs(), n_sims=400, seed=7, field_size=100, n_candidates=3)
     assert set(res["lineups"].contest_key) == set(NBA_CONTEST_TYPES) and len(NBA_CONTEST_TYPES) == 9
     assert {"n_sims", "seed", "stats_match_rate"} <= set(res["meta"])
     assert res["meta"]["n_sims"] == 400 and res["meta"]["seed"] == 7 and 0 <= res["meta"]["stats_match_rate"] <= 1
@@ -33,7 +33,7 @@ def test_build_slate_end_to_end(tmp_path):
 
 
 def test_written_pool_resimulates_to_the_builds_sims(tmp_path):
-    res = B.build_slate(*_inputs(), n_sims=400, seed=7, field_size=200)
+    res = B.build_slate(*_inputs(), n_sims=400, seed=7, field_size=100, n_candidates=3)
     B.write_published(res, tmp_path)
     pool = pd.read_parquet(tmp_path / "pool.parquet")
     meta = json.loads((tmp_path / "build_meta.json").read_text())
