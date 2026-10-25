@@ -1,37 +1,36 @@
 {
-  "stage": "refresh",
-  "started": "2026-10-23T10:41:50",
-  "finished": "2026-10-23T10:45:16",
+  "stage": "sunday",
+  "started": "2026-10-25T09:00:03",
+  "finished": "2026-10-25T09:03:09",
   "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-10-23T10:41:50",
-      "finished": "2026-10-23T10:41:52",
+      "started": "2026-10-25T09:00:04",
+      "finished": "2026-10-25T09:00:06",
       "ok": true,
       "message": "626 players, 12 games (draftkings)"
     },
     {
       "name": "stats_if_missing",
-      "started": "2026-10-23T10:41:52",
-      "finished": "2026-10-23T10:41:52",
+      "started": "2026-10-25T09:00:06",
+      "finished": "2026-10-25T09:00:06",
       "ok": true,
       "message": "skipped: stats current through 2026 week 6"
     },
     {
-      "name": "vegas_if_stale",
-      "started": "2026-10-23T10:41:52",
-      "finished": "2026-10-23T10:41:52",
+      "name": "vegas",
+      "started": "2026-10-25T09:00:06",
+      "finished": "2026-10-25T09:00:06",
       "ok": true,
-      "message": "27 games with lines; Odds API requests remaining: 469"
+      "message": "27 games with lines; Odds API requests remaining: 459"
     },
     {
       "name": "build",
-      "started": "2026-10-23T10:41:52",
-      "finished": "2026-10-23T10:45:16",
+      "started": "2026-10-25T09:00:06",
+      "finished": "2026-10-25T09:03:09",
       "ok": true,
       "message": "9 contest types built; name match rate 82%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Ben Mann, Brennan Presley, CJ Daniels, CJ Dippre"
     }
-  ],
-  "publish": "WARNING: push to GitHub failed \u2014 fatal: unable to access 'https://github.com/natergater24/nfl-dfs-optimizer.git/': Could not resolve host: github.com (the local app still works)"
+  ]
 }
