@@ -1,36 +1,29 @@
 {
-  "stage": "sunday",
-  "started": "2026-10-25T09:00:03",
-  "finished": "2026-10-25T09:03:09",
+  "stage": "sunday_late",
+  "started": "2026-10-25T11:45:03",
+  "finished": "2026-10-25T11:48:02",
   "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-10-25T09:00:04",
-      "finished": "2026-10-25T09:00:06",
+      "started": "2026-10-25T11:45:03",
+      "finished": "2026-10-25T11:45:05",
       "ok": true,
       "message": "626 players, 12 games (draftkings)"
     },
     {
-      "name": "stats_if_missing",
-      "started": "2026-10-25T09:00:06",
-      "finished": "2026-10-25T09:00:06",
+      "name": "vegas_if_stale",
+      "started": "2026-10-25T11:45:05",
+      "finished": "2026-10-25T11:45:05",
       "ok": true,
-      "message": "skipped: stats current through 2026 week 6"
-    },
-    {
-      "name": "vegas",
-      "started": "2026-10-25T09:00:06",
-      "finished": "2026-10-25T09:00:06",
-      "ok": true,
-      "message": "27 games with lines; Odds API requests remaining: 459"
+      "message": "skipped: lines fetched 165 min ago"
     },
     {
       "name": "build",
-      "started": "2026-10-25T09:00:06",
-      "finished": "2026-10-25T09:03:09",
+      "started": "2026-10-25T11:45:05",
+      "finished": "2026-10-25T11:48:02",
       "ok": true,
-      "message": "9 contest types built; name match rate 82%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Ben Mann, Brennan Presley, CJ Daniels, CJ Dippre"
+      "message": "9 contest types built; name match rate 81%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Ben Mann, Brennan Presley, CJ Daniels, CJ Dippre"
     }
   ]
 }
