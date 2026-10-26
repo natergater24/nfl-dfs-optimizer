@@ -1,13 +1,13 @@
 {
   "n_sims": 10000,
   "seed": 20261023,
-  "stats_match_rate": 0.9395348837209302,
-  "sims_fingerprint": "e4050084e343ccc6249f939df00196fdfb65087dc175459ec244a46475a0ead8",
-  "built_at_utc": "2026-10-26T18:00:23+00:00",
+  "stats_match_rate": 0.9420289855072463,
+  "sims_fingerprint": "2b8b2e025dd0c7fe7999015550ba55b05957501e064262c4c3c78467231449a3",
+  "built_at_utc": "2026-10-26T22:30:23+00:00",
   "draft_group_id": 155647,
   "name": "Main",
   "start": "2026-10-26T19:00:00",
   "games": 7,
-  "odds_remaining": "453",
+  "odds_remaining": "451",
   "slate_date": "2026-10-26"
 }
