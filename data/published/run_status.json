@@ -1,30 +1,22 @@
 {
-  "stage": "sunday_late",
-  "started": "2026-10-25T11:45:03",
-  "finished": "2026-10-25T11:48:02",
+  "stage": "tuesday",
+  "started": "2026-10-27T09:28:16",
+  "finished": "2026-10-27T09:28:25",
   "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-10-25T11:45:03",
-      "finished": "2026-10-25T11:45:05",
+      "started": "2026-10-27T09:28:16",
+      "finished": "2026-10-27T09:28:20",
       "ok": true,
-      "message": "626 players, 12 games (draftkings)"
+      "message": "554 players, 11 games (draftkings)"
     },
     {
-      "name": "vegas_if_stale",
-      "started": "2026-10-25T11:45:05",
-      "finished": "2026-10-25T11:45:05",
+      "name": "stats",
+      "started": "2026-10-27T09:28:20",
+      "finished": "2026-10-27T09:28:25",
       "ok": true,
-      "message": "skipped: lines fetched 165 min ago"
-    },
-    {
-      "name": "build",
-      "started": "2026-10-25T11:45:05",
-      "finished": "2026-10-25T11:48:02",
-      "ok": true,
-      "message": "9 contest types built; name match rate 81%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Ben Mann, Brennan Presley, CJ Daniels, CJ Dippre"
+      "message": "20364 player-weeks through 2026 week 7; model fit on 1846 team-games; actual points filled for 530 player-slates"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
