@@ -71,6 +71,10 @@ def render(d, key, label, field_scores):
             hover = ui.hover_names_html(alt)
             if hover:
                 st.markdown(hover, unsafe_allow_html=True)
+            if ui.has_injury_data(d.pool):     # alternates are recommended lineups too: backups on this device
+                alt_ids = alt.dk_id.astype(int).tolist()
+                abk = (device_backups(d, alt_ids, key, field_scores) if ui.tagged_ids(d.pool, alt_ids) else None)
+                ui.injury_watch(d.pool, alt_ids, abk, f"alt_{key}_{r}", _copy_to_my_lineup)
 
     st.subheader("💎 Outliers — swaps that keep you under the cap")
     sw = d.swaps[d.swaps.contest_key == key]

@@ -146,6 +146,30 @@ def test_recommended_uses_device_backups_when_not_published(make_app, injured_pu
     assert any(b.key == f"rec_single_entry_backup_{ids['q']}" for b in at.button)
 
 
+def test_alternate_shows_injury_watch_and_apply(make_app, injured_pub, tmp_path):
+    src, _ = injured_pub
+    pub = tmp_path / "pub"
+    shutil.copytree(src, pub)
+    pool = pd.read_parquet(pub / "player_pool.parquet")
+    lus = pd.read_parquet(pub / "lineups.parquet")
+    se = lus[lus.contest_key == "single_entry"]
+    alt = se[se["rank"] == 1]
+    aq = int(alt[~alt.dk_id.isin(se[se["rank"] == 0].dk_id) & (alt.position != "DST")].dk_id.iloc[0])
+    pool.loc[pool.dk_id.astype(int) == aq, ["status", "body_part"]] = ["Q", "Wrist"]
+    injuries.classify(pool).to_parquet(pub / "player_pool.parquet")
+    at = make_app(pub)
+    assert not at.exception
+    name = data.load(pub).pool.set_index("dk_id").at[aq, "name"]
+    assert f"If **{name}** sits:" in _md(at)                                  # backup computed on the device
+    btn = f"alt_single_entry_1_backup_{aq}"
+    assert any(b.key == btn for b in at.button)
+    at.button(key=btn).click().run()
+    assert not at.exception
+    mine = at.session_state["my_ids"]
+    assert aq not in mine and len(mine) == 9                                   # the alternate, reworked
+    assert len(set(mine) & set(alt.dk_id.astype(int))) >= 7 and set(mine) != set(se[se["rank"] == 0].dk_id)
+
+
 def test_my_lineup_backup_for_user_pick(make_app, injured_pub):
     pub, ids = injured_pub
     d = data.load(pub)

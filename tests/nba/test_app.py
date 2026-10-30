@@ -307,6 +307,41 @@ def test_nba_recommended_shows_injury_watch_and_apply(monkeypatch, nba_injured):
     assert q not in mine and all(int(i) in mine for i in bk["in_dk_ids"]) and len(mine) == 8
 
 
+def test_nba_alternate_shows_injury_watch_and_apply(monkeypatch, nba_pub, tmp_path):
+    import shutil
+
+    from nfldfs.injuries import classify
+    pub = tmp_path / "pub"
+    shutil.copytree(nba_pub[0], pub)
+    for s in SLATES[:2]:
+        folder = pub / "nba" / str(s["draft_group_id"])
+        pool, lus = pd.read_parquet(folder / "pool.parquet"), pd.read_parquet(folder / "lineups.parquet")
+        se = lus[lus.contest_key == "single_entry"]
+        alt = se[se["rank"] == 1]
+        aq = int(alt[~alt.dk_id.isin(se[se["rank"] == 0].dk_id)].dk_id.iloc[0])
+        pool.loc[pool.dk_id.astype(int) == aq, ["status", "body_part"]] = ["GTD", "Ankle"]
+        classify(pool).to_parquet(folder / "pool.parquet")
+        meta = json.loads((folder / "build_meta.json").read_text())
+        meta["built_at_utc"] = "2026-10-23T18:00:00+00:00"            # a fresh cache key for the regenerated sims
+        meta.pop("sims_fingerprint", None)
+        (folder / "build_meta.json").write_text(json.dumps(meta))
+    at = _app(monkeypatch, pub, "1")
+    assert not at.exception
+    dg = at.session_state["nba_dg"]
+    folder = pub / "nba" / str(dg)
+    pool, lus = pd.read_parquet(folder / "pool.parquet"), pd.read_parquet(folder / "lineups.parquet")
+    aq = int(pool[pool.inj_tag == "GTD"].dk_id.iloc[0])
+    name = pool.set_index("dk_id").at[aq, "name"]
+    assert f"If **{name}** sits:" in "\n".join(m.value for m in at.markdown)   # backup computed on the device
+    btn = f"nba_alt_single_entry_1_backup_{aq}"
+    assert any(b.key == btn for b in at.button)
+    at.button(key=btn).click().run()
+    assert not at.exception
+    mine = at.session_state["nba_my_ids"]
+    alt = lus[(lus.contest_key == "single_entry") & (lus["rank"] == 1)]
+    assert aq not in mine and len(mine) == 8 and len(set(mine) & set(alt.dk_id.astype(int))) >= 6
+
+
 def test_nba_my_lineup_backup_for_user_pick(monkeypatch, nba_injured):
     from nbadfs_app import data, views
     pub, ids = nba_injured

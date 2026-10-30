@@ -384,6 +384,8 @@ def _recommended(sd: data.SlateData, key: str) -> None:
             hover = ui.hover_names_html(alt)
             if hover:
                 st.markdown(hover, unsafe_allow_html=True)
+            # alternates are recommended lineups too: their backups are computed on this device
+            _watch(sd, alt.dk_id.astype(int).tolist(), key, f"nba_alt_{key}_{r}", _to_my_lineup)
 
     st.subheader("🔄 One-player swaps (stay under the cap)")
     st.caption(f"The number is how the {_phrase(key).lower()} share moves, in percentage points. A ▼ swap scores "
