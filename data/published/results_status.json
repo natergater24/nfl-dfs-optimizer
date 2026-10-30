@@ -1,16 +1,15 @@
 {
   "stage": "results",
-  "started": "2026-10-23T10:50:20",
-  "finished": "2026-10-23T10:50:20",
+  "started": "2026-10-30T12:38:18",
+  "finished": "2026-10-30T12:38:18",
   "ok": true,
   "steps": [
     {
       "name": "results",
-      "started": "2026-10-23T10:50:20",
-      "finished": "2026-10-23T10:50:20",
+      "started": "2026-10-30T12:38:18",
+      "finished": "2026-10-30T12:38:18",
       "ok": true,
-      "message": "entry history: 1 entries updated, 0 new"
+      "message": "entry history: 1 entries updated, 8 new"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
