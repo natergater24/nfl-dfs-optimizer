@@ -1,15 +1,15 @@
 {
   "stage": "results",
-  "started": "2026-10-30T12:38:18",
-  "finished": "2026-10-30T12:38:18",
+  "started": "2026-10-30T12:38:47",
+  "finished": "2026-10-30T12:38:47",
   "ok": true,
   "steps": [
     {
       "name": "results",
-      "started": "2026-10-30T12:38:18",
-      "finished": "2026-10-30T12:38:18",
+      "started": "2026-10-30T12:38:47",
+      "finished": "2026-10-30T12:38:47",
       "ok": true,
-      "message": "entry history: 1 entries updated, 8 new"
+      "message": "entry history: 9 entries updated, 0 new"
     }
   ]
 }
