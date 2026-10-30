@@ -74,6 +74,24 @@ def test_lean_rules(text, expected):
     assert injuries.lean(text, RECENT, NOW) == expected
 
 
+@pytest.mark.parametrize("text", [
+    "His return looks improbable.",
+    "The team will scout for a replacement kicker.",
+    "Coaches said they will players rotate.",
+    "He is undoubtful-ish about the playbook.",
+    "The upgradedness of the line is unclear.",
+    "Doubtfully, the club will mismanage it.",
+])
+def test_lean_phrases_need_word_boundaries(text):
+    assert injuries.lean(text, RECENT, NOW) == "unclear"
+
+
+def test_lean_word_boundary_phrases_still_match():
+    assert injuries.lean("He is probable.", RECENT, NOW) == "in"
+    assert injuries.lean("He is out for Sunday.", RECENT, NOW) == "out"
+    assert injuries.lean("He will play Sunday.", RECENT, NOW) == "in"
+
+
 def test_lean_none_cases():
     assert injuries.lean(None, RECENT, NOW) is None
     assert injuries.lean("", RECENT, NOW) is None

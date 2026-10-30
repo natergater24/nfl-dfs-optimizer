@@ -60,8 +60,10 @@ _IN = ["expected to play", "will play", "on track to play", "on track to return 
 
 _PHRASES = [(p, "out") for p in _OUT] + [(p, "in") for p in _IN]
 _RAW = {"is out": r"\bis\s+out\b(?!\s+of\s+practice)"}  # "out of practice" is practice-only
-_PHRASE_RE = re.compile("|".join(r"(?P<p%d>%s)" % (i, _RAW.get(p) or re.escape(p).replace(r"\ ", r"\s+"))
-                                 for i, (p, _) in enumerate(_PHRASES)))
+# Every phrase matches whole words only: "improbable" is not "probable", "scout for" is not "out for".
+_PHRASE_RE = re.compile("|".join(
+    r"(?P<p%d>%s)" % (i, _RAW.get(p) or r"\b" + re.escape(p).replace(r"\ ", r"\s+") + r"\b")
+    for i, (p, _) in enumerate(_PHRASES)))
 # A game-in phrase that points at a later game ("expected to play next week") does not count.
 _FUTURE = re.compile(r"next\s+(week|game|sunday|monday|thursday|matchup)|later\s+this\s+season"
                      r"|week\s+\d+\b(?!\s+(prep|practice|preparation))|after\s+the\s+bye|return\s+next")
