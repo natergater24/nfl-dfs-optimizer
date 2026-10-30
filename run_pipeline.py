@@ -220,6 +220,34 @@ def _injury_warning(exc: Exception) -> str:
     return f"; WARNING: injury news unavailable ({type(exc).__name__})"
 
 
+class _RunCache:
+    """One run's injury requests, shared across NBA slates: Sleeper is fetched once and each ESPN blurb once
+    (failures are remembered too). After MAX_NEWS_FAILURES consecutive failures every new request fails
+    at once, so a source that is down costs at most a few timeouts per run."""
+
+    def __init__(self, session):
+        self.session, self.seen, self.failures = session, {}, 0
+
+    def get(self, url, timeout=None):
+        if url in self.seen:
+            hit = self.seen[url]
+            if isinstance(hit, Exception):
+                raise hit
+            return hit
+        if self.failures >= injuries.MAX_NEWS_FAILURES:
+            raise ConnectionError("injury sources unavailable for the rest of this run")
+        try:
+            resp = self.session.get(url, timeout=timeout)
+        except Exception as exc:
+            self.failures += 1
+            self.seen[url] = exc
+            raise
+        bad = getattr(resp, "status_code", 200) >= 400 and getattr(resp, "status_code", 200) != 404
+        self.failures = self.failures + 1 if bad else 0
+        self.seen[url] = resp
+        return resp
+
+
 def step_build(today, args) -> str:
     P = config.PROCESSED
     sched_path = P / "schedule_rows.parquet"
@@ -560,14 +588,31 @@ def step_nba_build(today, args) -> str:
     cur, last = nba_season_years(day)
     rates_cur, rates_last = _nba_rates(cur), _nba_rates(last)
     flags, warnings, built = [], "", 0
+    cache, inj_warn, now = None, "", dt.datetime.now(dt.timezone.utc)    # one Sleeper call per run, shared
     for s in slates:
         dg = s["draft_group_id"]
         if s.get("downloaded") is False:
             flags.append({**s, "published": _built_today(dg, day)})
             continue
         try:
-            res = nbadfs.build.build_slate(_nba_salary_path(day, dg).read_text(encoding="utf-8-sig"), lines,
-                                           rates_last, rates_cur)
+            text = _nba_salary_path(day, dg).read_text(encoding="utf-8-sig")
+            # Injury tags + news before the build (they decide who may be suggested and who sits in some sims);
+            # network lives here, not in build_slate, and no news problem may fail a slate.
+            info, w = None, ""
+            try:
+                cache = cache or _RunCache(_injury_session())
+                info, w = injuries.add_injury_columns(nba_dk.parse_salaries(text), "nba", now=now, session=cache,
+                                                      sleep=_news_sleep)
+            except Exception as exc:  # noqa: BLE001
+                w = _injury_warning(exc)
+            inj_warn = inj_warn or w
+            res = nbadfs.build.build_slate(text, lines, rates_last, rates_cur, injury_info=info)
+            try:   # news for everyone in a recommended lineup or alternate who wasn't fetched before the build
+                res["pool"], w = injuries.add_news(res["pool"], "nba", res["lineups"]["dk_id"], session=cache,
+                                                   sleep=_news_sleep)
+                inj_warn = inj_warn or w
+            except Exception as exc:  # noqa: BLE001
+                inj_warn = inj_warn or _injury_warning(exc)
             res["meta"].update(draft_group_id=dg, name=s["name"], start=s["start"], games=s["games"],
                                odds_remaining=odds.get("requests_remaining"), slate_date=day.isoformat())
             nbadfs.build.write_published(res, nba_config.PUBLISHED_NBA / str(dg))
@@ -579,7 +624,7 @@ def step_nba_build(today, args) -> str:
             flags.append({**s, "published": _built_today(dg, day)})
     atomic_write_text(nba_config.PUBLISHED_NBA / "slates.json", json.dumps(flags, indent=2))
     _prune_nba_published(s["draft_group_id"] for s in slates)
-    return f"{built} of {len(slates)} NBA slate(s) built{warnings}"
+    return f"{built} of {len(slates)} NBA slate(s) built{warnings}{inj_warn}"
 
 
 def step_publish(today, args) -> str:

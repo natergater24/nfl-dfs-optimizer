@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pulp
 
+from nfldfs.injuries import recommendable
 from nfldfs.optimizer import InfeasibleError, _solver
 
 from .config import MIN_GAMES, MIN_SALARY_DEFAULT, MIN_UNIQUE_PLAYERS, SALARY_CAP
@@ -17,11 +18,12 @@ def solve_lineup(pool: pd.DataFrame, objective: np.ndarray, *, min_salary: int =
                  max_salary: int = SALARY_CAP, locks=(), excludes=(), previous=(),
                  min_unique: int = MIN_UNIQUE_PLAYERS) -> list[int]:
     """Best lineup as 8 dk_ids in ROSTER_SLOTS order. `objective` is aligned with pool rows.
-    Locks force a player in even when he is not playable (the user's lock wins); `previous` is an
+    App-made picks come from recommendable players only (no D/OUT/IR, no "news leans out"; pools without
+    injury columns: playable). Locks force a player in whatever his tag (the user's lock wins); `previous` is an
     iterable of dk_id collections, each of which the new lineup must differ from by >= `min_unique`."""
     dkid = pool["dk_id"].to_numpy().astype(np.int64)
     sal = pool["salary"].to_numpy().astype(int)
-    playable = pool["playable"].to_numpy(dtype=bool)
+    ok = recommendable(pool)
     games = pool["game"].to_numpy()
     slots_of = list(pool["slots"])
     lock_ids = {int(d) for d in locks}
@@ -33,7 +35,7 @@ def solve_lineup(pool: pd.DataFrame, objective: np.ndarray, *, min_salary: int =
     if missing:
         raise InfeasibleError(f"Locked player(s) {sorted(missing)} are not on this slate")
     rows = [i for i in range(len(pool))
-            if int(dkid[i]) in lock_ids or (playable[i] and int(dkid[i]) not in excluded)]
+            if int(dkid[i]) in lock_ids or (ok[i] and int(dkid[i]) not in excluded)]
     n_games = len({games[i] for i in rows})
     if n_games < MIN_GAMES:
         raise InfeasibleError(f"A lineup needs players from at least {MIN_GAMES} games, but only {n_games} "

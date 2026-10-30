@@ -7,6 +7,8 @@ import io
 import pandas as pd
 import requests
 
+from nfldfs.injuries import tag_class
+
 from .rules import eligible_slots
 
 LOBBY_URL = "https://www.draftkings.com/lobby/getcontests?sport=NBA"
@@ -82,5 +84,6 @@ def parse_salaries(text: str) -> pd.DataFrame:
         "salary": df["Salary"].astype(int),
         "status": status,
         "dk_avg": pd.to_numeric(df["AvgPointsPerGame"], errors="coerce").fillna(0.0),
-        "playable": status != "O",
+        # DraftKings-playable = not D / O (OUT) / IR (or an unfamiliar status); Q and GTD still play
+        "playable": [tag_class(s) != "excluded" for s in status],
     })

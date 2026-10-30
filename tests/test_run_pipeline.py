@@ -942,3 +942,103 @@ def test_nfl_build_survives_injury_code_crash(tmp_path, monkeypatch):
     pool = pd.read_parquet(tmp_path / "published" / "player_pool.parquet").set_index("name")
     # DraftKings tags still applied (classify fallback): discount + sitting match the backups
     assert pool.loc["CCC WR1", "inj_tag"] == "Q" and pool.loc["CCC WR1", "play_prob"] == config.Q_PLAY_PROB
+
+
+# ── NBA injuries ─────────────────────────────────────────────────────────────────────────────────────────
+def _nba_csv(statuses: dict) -> str:
+    import io
+    df = pd.read_csv(io.StringIO((FIXD / "nba_salaries_sample.csv").read_text()), keep_default_na=False, dtype=str)
+    for name, st in statuses.items():
+        df.loc[df["Name"] == name, "Status"] = st
+    return df.to_csv(index=False)
+
+
+def _nba_rank0_favourites(tmp_path, monkeypatch):
+    """The two players in the most rank-0 lineups of an untagged single-slate run."""
+    _one_slate(monkeypatch)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    pub = tmp_path / "published" / "nba" / "155547"
+    lus, pool = pd.read_parquet(pub / "lineups.parquet"), pd.read_parquet(pub / "pool.parquet")
+    names = pool.set_index("dk_id")["name"]
+    return [names[int(d)] for d in lus[lus["rank"] == 0].dk_id.value_counts().index[:2]]
+
+
+def test_nba_build_publishes_injury_files(nba_env, monkeypatch):
+    from nbadfs.build import sims_fingerprint
+    from nbadfs.dk import parse_salaries
+    from nbadfs.simulate import simulate
+    tmp_path, _ = nba_env
+    fav, second = _nba_rank0_favourites(tmp_path, monkeypatch)
+    text = _nba_csv({fav: "Q", second: "GTD"})
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_salary_csv", lambda dg: text)
+    lobby = json.loads((FIXD / "nba_lobby_sample.json").read_text())          # all three slates again
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_lobby", lambda: lobby)
+    base = parse_salaries(text)
+    sleeper = {n: (t, f"E{d}") for n, t, d in zip(base["name"], base["team"], base["dk_id"])}
+    news = {f"E{d}": "He went through shootaround." for d in base["dk_id"]}
+    fid = int(base.loc[base["name"] == fav, "dk_id"].iloc[0])
+    sid = int(base.loc[base["name"] == second, "dk_id"].iloc[0])
+    news[f"E{fid}"] = f"{fav} has been ruled out for Friday's game."
+    news[f"E{sid}"] = f"{second} did not practice Thursday."
+    sess = FakeInjurySession(sleeper, news)
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: sess)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    msg = [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_build"][0]["message"]
+    assert msg.startswith("3 of 3 NBA slate(s) built") and "WARNING" not in msg
+    assert sum("sleeper" in u for u in sess.urls) == 1                      # one Sleeper call per run
+    espn = [u for u in sess.urls if "espn" in u]
+    assert len(espn) == len(set(espn))                                     # news shared across slates
+    for dg in (155547, 155553, 155557):
+        pub = tmp_path / "published" / "nba" / str(dg)
+        pool = pd.read_parquet(pub / "pool.parquet")
+        meta = json.loads((pub / "build_meta.json").read_text())
+        assert sims_fingerprint(simulate(pool, meta["n_sims"], meta["seed"])) == meta["sims_fingerprint"]
+        pool = pool.set_index("dk_id")
+        assert {"inj_tag", "inj_class", "body_part", "espn_id", "news_headline", "news_story", "news_published",
+                "lean", "recommendable", "play_prob"} <= set(pool.columns)
+        assert pool.at[fid, "lean"] == "out" and not pool.at[fid, "recommendable"]
+        assert pool.at[sid, "lean"] == "unclear" and pool.at[sid, "play_prob"] == config.Q_PLAY_PROB
+        lus = pd.read_parquet(pub / "lineups.parquet")
+        swaps = pd.read_parquet(pub / "swaps.parquet")
+        bk = pd.read_parquet(pub / "injury_backups.parquet")
+        assert fid not in set(lus.dk_id) and fid not in set(swaps.in_id)
+        assert fid not in {int(i) for ids in bk.in_dk_ids for i in ids}
+        suggested = set(lus.dk_id.astype(int))
+        has_news = set(pool.index[pool.news_headline != ""])
+        assert suggested <= has_news and not (has_news - suggested - set(pool.index[pool.inj_tag != ""]))
+        rec = lus[lus["rank"] == 0].merge(pool[["inj_class"]], left_on="dk_id", right_index=True)
+        assert list(bk.columns) == ["contest_key", *run_pipeline.build.lineups.BACKUP_COLUMNS]
+        assert len(bk) == int((rec.inj_class != "healthy").sum())
+        assert {int(i) for ids in bk.in_dk_ids for i in ids} <= set(pool.index[pool.inj_class == "healthy"])
+        if dg == 155547:
+            assert sid in set(rec.dk_id) and len(bk) > 0                   # not vacuous
+
+
+def test_nba_build_survives_news_failure(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    monkeypatch.setattr(run_pipeline.nba_dk, "fetch_salary_csv", lambda dg: _nba_csv({"Mikal Bridges": "GTD"}))
+    sess = FakeInjurySession(fail=True)
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: sess)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    msg = [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_build"][0]["message"]
+    assert msg.startswith("3 of 3 NBA slate(s) built")
+    assert msg.count("; WARNING: injury news unavailable (ConnectionError)") == 1
+    assert sum("sleeper" in u for u in sess.urls) == 1
+    pub = tmp_path / "published" / "nba" / "155547"
+    pool = pd.read_parquet(pub / "pool.parquet").set_index("name")
+    assert pool.at["Mikal Bridges", "inj_tag"] == "GTD" and pool.at["Kawhi Leonard", "inj_tag"] == "OUT"
+    assert (pool.news_headline == "").all()
+    assert (pub / "injury_backups.parquet").exists() and (pub / "build_meta.json").exists()
+
+
+def test_nba_build_survives_injury_code_crash(nba_env, monkeypatch):
+    tmp_path, _ = nba_env
+    _one_slate(monkeypatch)
+    monkeypatch.setattr(run_pipeline.injuries, "add_injury_columns", _boom)
+    monkeypatch.setattr(run_pipeline.injuries, "add_news", _boom)
+    monkeypatch.setattr(run_pipeline.injuries, "fetch_sleeper", _boom)
+    assert run_pipeline.main(["--stage", "nba", "--today", NBA_DAY]) == 0
+    msg = [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_build"][0]["message"]
+    assert msg.startswith("1 of 1 NBA slate(s) built") and "; WARNING: injury news unavailable (RuntimeError)" in msg
+    pool = pd.read_parquet(tmp_path / "published" / "nba" / "155547" / "pool.parquet").set_index("name")
+    assert pool.at["Mikal Bridges", "inj_tag"] == "Q" and pool.at["Mikal Bridges", "play_prob"] == config.Q_PLAY_PROB

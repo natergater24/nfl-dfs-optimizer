@@ -10,6 +10,9 @@ BASE_COLUMNS = ["dk_id", "name", "team", "opp", "game", "tip", "positions", "slo
                 "dk_avg", "playable"]
 POOL_COLUMNS = BASE_COLUMNS + ["minutes", "rate", "implied_total", "opp_implied", "line_missing", "median",
                                "sd", "floor", "ceiling"]
+# Injury columns (nfldfs.injuries) ride along with the pool when present.
+INJURY_COLUMNS = ["inj_tag", "inj_class", "lean", "recommendable", "play_prob", "body_part", "injury_updated",
+                  "espn_id", "news_headline", "news_story", "news_published"]
 PRIOR_GAMES = 8.0
 MAX_MINUTES = 40.0
 VEGAS_CLIP = (0.85, 1.15)
@@ -49,8 +52,11 @@ def _redistribute(df: pd.DataFrame, minutes: np.ndarray) -> np.ndarray:
 
 
 def project(pool: pd.DataFrame, lines: pd.DataFrame, matched: pd.DataFrame) -> pd.DataFrame:
-    """`matched` is the output of stats.match_rates (pool + games/min/rate for last and current season)."""
-    df = pool[BASE_COLUMNS].reset_index(drop=True).copy()
+    """`matched` is the output of stats.match_rates (pool + games/min/rate for last and current season).
+    On an injury-aware pool (a `recommendable` column), a questionable player whose news leans out is
+    projected like an Out player: zero, with his minutes shared among teammates."""
+    extra = [c for c in INJURY_COLUMNS if c in pool.columns]
+    df = pool[BASE_COLUMNS + extra].reset_index(drop=True).copy()
     m = matched.reset_index(drop=True)
     g_cur = m["games_cur"].fillna(0.0).to_numpy(dtype=float)
     w = g_cur / (g_cur + PRIOR_GAMES)
@@ -73,6 +79,8 @@ def project(pool: pd.DataFrame, lines: pd.DataFrame, matched: pd.DataFrame) -> p
     scale = np.clip(df["implied_total"].to_numpy() / lg, *VEGAS_CLIP)
 
     playable = df["playable"].to_numpy(dtype=bool)
+    if "recommendable" in df.columns:
+        playable = playable & df["recommendable"].to_numpy(dtype=bool)
     minutes = _redistribute(df.assign(playable=playable), np.where(has_stats, minutes, np.nan))
     rate = rate * scale
 
@@ -85,4 +93,4 @@ def project(pool: pd.DataFrame, lines: pd.DataFrame, matched: pd.DataFrame) -> p
     df["sd"] = 0.30 * median + 2.0
     df["floor"] = np.nan
     df["ceiling"] = np.nan
-    return df[POOL_COLUMNS]
+    return df[POOL_COLUMNS + extra]

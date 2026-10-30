@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 from nfldfs.config import CANDIDATE_PERTURBATION, SWAP_MAX_OWN_TOURNAMENT
-from nfldfs.lineups import objective_values
+from nfldfs.injuries import classify, recommendable
+from nfldfs.lineups import BACKUP_COLUMNS, NO_BACKUP, _shortlist, objective_values
 from nfldfs.sim_eval import contest_metric, lineup_scores
 
 from .config import MIN_GAMES, MIN_SALARY_DEFAULT, MIN_UNIQUE_PLAYERS, NBA_CONTEST_TYPES, SALARY_CAP, SEED
@@ -61,14 +62,16 @@ def _eligible(pool: pd.DataFrame, slot: str) -> np.ndarray:
 
 def find_swaps(pool, sims, lineup: list[int], contest: dict, field_scores, n: int = N_SWAPS,
                per_slot: int = SWAPS_PER_SLOT) -> pd.DataFrame:
-    """Best single-player swaps for `lineup` (dk_ids, slot order). The incoming player must be playable,
+    """Best single-player swaps for `lineup` (dk_ids, slot order). The incoming player must be recommendable,
     able to fill the outgoing player's slot, keep the lineup under the cap and from >= 2 games.
     `delta` = change in the contest metric. Columns out_id, in_id, delta (no contest_key)."""
     rows = to_rows(pool, lineup)
     sal = pool["salary"].to_numpy().astype(int)
     games = pool["game"].to_numpy()
     own = pool["own_pct"].to_numpy(float)
-    playable = pool["playable"].to_numpy(dtype=bool)
+    # Never suggest D/OUT/IR or "news leans out" players (playable-only on pools without injury columns).
+    # Phase 2's nbadfs/late_swap.py re-picks must use this same recommendable filter.
+    playable = recommendable(pool)
     dkid = pool["dk_id"].to_numpy().astype(np.int64)
     obj = objective_values(pool, contest["weights"])
     in_lineup = np.zeros(len(pool), dtype=bool)
@@ -93,6 +96,125 @@ def find_swaps(pool, sims, lineup: list[int], contest: dict, field_scores, n: in
                        "delta": metric[1:] - metric[0]})
     df = df.sort_values("delta", ascending=False, kind="stable").drop_duplicates("in_id")
     return df.head(n).reset_index(drop=True)
+
+
+def _n_games(base_games: set, *new) -> np.ndarray:
+    """Distinct games in a lineup: `base_games` plus each column of the incoming players' games."""
+    known = list(base_games)
+    count = np.full(len(new[0]), len(known))
+    seen = []
+    for g in new:
+        fresh = ~np.isin(g, known)
+        for prev in seen:
+            fresh &= g != prev
+        count = count + fresh
+        seen.append(g)
+    return count
+
+
+def injury_backups(pool: pd.DataFrame, sims: np.ndarray, field_scores, lineup, contest: dict,
+                   per_slot: int = 10) -> pd.DataFrame:
+    """One row per tagged (non-healthy) player in `lineup` (dk_ids in ROSTER_SLOTS order): the best healthy
+    1:1 replacement for his slot under the cap; else the best two-player rework (him + one other spot);
+    else NO_BACKUP. Columns as nfldfs.lineups.BACKUP_COLUMNS.
+
+    Replacements are healthy (no tag or P), recommendable, not already in the lineup, eligible for the
+    slot they fill, and the new lineup keeps players from >= MIN_GAMES games. Scored with the contest
+    metric against the field (`field_scores` = lineup_scores(sims, field))."""
+    rows = to_rows(pool, lineup)
+    p = pool if {"inj_class", "recommendable"} <= set(pool.columns) else classify(pool)
+    cls = p["inj_class"].to_numpy()
+    tagged = [k for k, r in enumerate(rows) if cls[r] != "healthy"]
+    if not tagged:
+        return pd.DataFrame(columns=BACKUP_COLUMNS)
+    sal = p["salary"].to_numpy().astype(int)
+    games = p["game"].to_numpy()
+    dk = p["dk_id"].to_numpy().astype(np.int64)
+    in_lineup = np.zeros(len(p), dtype=bool)
+    in_lineup[rows] = True
+    free = (cls == "healthy") & recommendable(p) & ~in_lineup
+    obj = objective_values(p, contest["weights"])
+    total = int(sal[rows].sum())
+    base = sims[:, rows].sum(axis=1)
+    fs = field_scores
+
+    def metric(scores):
+        return contest_metric(scores.astype(np.float32, copy=False), fs, contest["metric"])
+
+    before = float(metric(base[:, None])[0])
+
+    def fits(k):
+        return np.where(free & _eligible(p, ROSTER_SLOTS[k]))[0]
+
+    def name(i):
+        return str(p["name"].iat[i])
+
+    def row(t, kind, outs, ins, after, message):
+        return {"tagged_dk_id": int(dk[t]), "kind": kind, "out_dk_ids": [int(dk[i]) for i in outs],
+                "in_dk_ids": [int(dk[i]) for i in ins],
+                "remaining_salary": int(SALARY_CAP - total + (sal[list(outs)].sum() - sal[list(ins)].sum() if ins else 0)),
+                "metric_before": before, "metric_after": float(after), "message": message}
+
+    out = []
+    for kt in tagged:
+        t = rows[kt]
+        keep = {games[r] for r in rows if r != t}
+        cand = fits(kt)
+        cand = cand[(total - sal[t] + sal[cand] <= SALARY_CAP) & (_n_games(keep, games[cand]) >= MIN_GAMES)]
+        if len(cand):
+            m = metric(base[:, None] - sims[:, [t]] + sims[:, cand])
+            b = int(np.argmax(m))
+            j = int(cand[b])
+            out.append(row(t, "1:1", [t], [j], m[b], f"If {name(t)} sits: {name(j)}"))
+            continue
+        best = None
+        jt = _shortlist(fits(kt), obj, sal, per_slot)
+        for ko, o in enumerate(rows):
+            if o == t or not len(jt):
+                continue
+            kk = _shortlist(fits(ko), obj, sal, per_slot)
+            if not len(kk):
+                continue
+            J, K = (a.ravel() for a in np.meshgrid(jt, kk, indexing="ij"))
+            keep2 = {games[r] for r in rows if r not in (t, o)}
+            ok = ((J != K) & (total - sal[t] - sal[o] + sal[J] + sal[K] <= SALARY_CAP)
+                  & (_n_games(keep2, games[J], games[K]) >= MIN_GAMES))
+            if not ok.any():
+                continue
+            J, K = J[ok], K[ok]
+            m = metric((base - sims[:, t] - sims[:, o])[:, None] + sims[:, J] + sims[:, K])
+            b = int(np.argmax(m))
+            if best is None or m[b] > best[0]:
+                best = (float(m[b]), o, int(J[b]), int(K[b]))
+        if best is not None:
+            m, o, j, k = best
+            out.append(row(t, "two-player", [t, o], [j, k], m,
+                           f"If {name(t)} sits: {name(j)}, {name(k)} for {name(t)}, {name(o)}"))
+        else:
+            out.append(row(t, "none", [t], [], before, NO_BACKUP))
+    return pd.DataFrame(out, columns=BACKUP_COLUMNS)
+
+
+def rank0_backups(pool: pd.DataFrame, sims: np.ndarray, field: np.ndarray, lineups: pd.DataFrame,
+                  contest_types: dict = NBA_CONTEST_TYPES) -> pd.DataFrame:
+    """injury_backups for every contest type's rank-0 lineup (one row per tagged player in it)."""
+    cols = ["contest_key", *BACKUP_COLUMNS]
+    rec = lineups[lineups["rank"] == 0]
+    p = pool if {"inj_class", "recommendable"} <= set(pool.columns) else classify(pool)
+    healthy = dict(zip(p["dk_id"].astype("int64"), p["inj_class"] == "healthy"))
+    order = {s: k for k, s in enumerate(ROSTER_SLOTS)}
+    frames, field_scores = [], None
+    for key, g in rec.groupby("contest_key", sort=False):
+        if all(healthy[int(d)] for d in g["dk_id"]):
+            continue
+        if field_scores is None:
+            field_scores = lineup_scores(sims, field)
+        ids = g.sort_values("slot", key=lambda s: s.map(order), kind="stable")["dk_id"].tolist()
+        bk = injury_backups(p, sims, field_scores, ids, contest_types[key])
+        bk.insert(0, "contest_key", key)
+        frames.append(bk)
+    frames = [f for f in frames if len(f)]
+    return pd.concat(frames, ignore_index=True)[cols] if frames else pd.DataFrame(columns=cols)
 
 
 def build_all(pool: pd.DataFrame, sims: np.ndarray, field: np.ndarray, contest_types: dict = NBA_CONTEST_TYPES,
@@ -138,8 +260,22 @@ def best_lineup(pool: pd.DataFrame, sims: np.ndarray, field: np.ndarray, contest
     return cands[i], float(metric[i])
 
 
+_TAG_WORD = {"OUT": "Out", "D": "Doubtful", "IR": "on IR"}
+
+
 def out_lock_warnings(pool: pd.DataFrame, locks) -> list[str]:
-    """One "⚠ <name> is listed Out" per locked player DraftKings lists as Out."""
+    """One ⚠ per locked player the app would never pick itself: "⚠ <name> is listed Out" (Doubtful, on IR)
+    for DraftKings-unplayable players, "⚠ <name>: news leans out" for a questionable one whose news leans out."""
     lock_ids = {int(d) for d in locks}
-    hit = pool[pool["dk_id"].astype("int64").isin(lock_ids) & ~pool["playable"].astype(bool)]
-    return [f"⚠ {name} is listed Out" for name in hit["name"]]
+    hit = pool[pool["dk_id"].astype("int64").isin(lock_ids)]
+    tags = hit["inj_tag"] if "inj_tag" in hit.columns else pd.Series("OUT", index=hit.index)
+    rec = hit["recommendable"].astype(bool) if "recommendable" in hit.columns else hit["playable"].astype(bool)
+    out = []
+    for i in hit.index:
+        name = hit.at[i, "name"]
+        if not bool(hit.at[i, "playable"]):
+            tag = str(tags.at[i]) or "OUT"
+            out.append(f"⚠ {name} is listed {_TAG_WORD.get(tag, tag)}")
+        elif not rec.at[i]:
+            out.append(f"⚠ {name}: news leans out")
+    return out
