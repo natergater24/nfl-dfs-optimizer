@@ -20,6 +20,7 @@ from nfldfs_app.ui import EASTERN, to_eastern
 
 LINEUP_INFO = ["name", "team", "opp", "game", "positions", "slots", "salary", "median", "floor", "ceiling",
                "own_pct", "tier", "playable", "status"]
+LINEUP_INJURY = ["inj_tag", "inj_class", "lean", "body_part", "news_headline", "news_story", "news_published"]
 
 
 def published_dir() -> Path:
@@ -67,6 +68,7 @@ class SlateData:
     field: np.ndarray
     meta: dict
     row_of: dict = dc_field(default_factory=dict)
+    backups: pd.DataFrame = dc_field(default_factory=pd.DataFrame)     # injury_backups.parquet (empty for old builds)
 
     def __post_init__(self):
         self.row_of = {int(d): i for i, d in enumerate(self.pool["dk_id"])}
@@ -82,11 +84,14 @@ def load_slate(nba_dir: Path, dg) -> SlateData:
     folder = Path(nba_dir) / str(dg)
     pool = pd.read_parquet(folder / "pool.parquet")
     pool["slots"] = [list(s) for s in pool["slots"]]
-    lineups = pd.read_parquet(folder / "lineups.parquet").merge(pool[["dk_id", *LINEUP_INFO]], on="dk_id",
+    extra = [c for c in LINEUP_INJURY if c in pool.columns]          # builds made before injury tags have none
+    lineups = pd.read_parquet(folder / "lineups.parquet").merge(pool[["dk_id", *LINEUP_INFO, *extra]], on="dk_id",
                                                                 how="left")
+    bk = folder / "injury_backups.parquet"
     return SlateData(dg=int(dg), pool=pool, lineups=lineups, swaps=pd.read_parquet(folder / "swaps.parquet"),
                      field=np.load(folder / "field.npy").astype(np.int64),
-                     meta=_json(folder / "build_meta.json") or {})
+                     meta=_json(folder / "build_meta.json") or {},
+                     backups=pd.read_parquet(bk) if bk.exists() else pd.DataFrame())
 
 
 @st.cache_resource(show_spinner=False, max_entries=4)

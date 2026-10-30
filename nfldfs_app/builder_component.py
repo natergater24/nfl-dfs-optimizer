@@ -55,6 +55,7 @@ CSS = """
 .colhdr { display: grid; grid-template-columns: 1fr 70px 92px 70px; gap: 8px; padding: 0 10px 4px; color: var(--muted); font-size: 12px; }
 .colhdr span:not(:first-child) { text-align: right; }
 .tag.out { color: #fff; background: var(--bad); border-color: var(--bad); }
+.tag.inj { font-weight: 700; border: none; white-space: nowrap; cursor: help; }
 .mu { color: #fff; font-weight: 600; font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; cursor: help; }
 """
 
@@ -80,6 +81,9 @@ export default function (component) {
   const k = v => money(v);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const mu = p => `<span class="mu" style="background:${esc(p.mu_color)}" title="${esc(p.mu_text)}">vs ${esc(p.opp)} · ${esc(p.mu_label)}</span>`;
+  // injury tag chip (Q/GTD yellow, D orange, OUT/IR red, P gray); old builds without tags keep the OUT tag
+  const inj = p => p.inj ? `<span class="tag inj" style="background:${esc(p.inj_color)};color:${esc(p.inj_fg)}" title="${esc(p.inj_title || '')}">${esc(p.inj)}</span>`
+                         : (p.out ? '<span class="tag out">OUT</span>' : '');
   const used = () => lineup.reduce((a, id) => a + (id && byId.get(id) ? byId.get(id).salary : 0), 0);
   const fits = (i, p) => p.slots.includes(SLOTS[i]);
 
@@ -138,7 +142,7 @@ export default function (component) {
       const cls = ['slot', p || gone ? '' : 'empty', UI.selSlot === i ? 'sel' : '',
                    sp ? (fits(i, sp) ? 'target' : 'dim') : ''].join(' ');
       const body = gone ? `<div class="nm">— unavailable — remove and pick a replacement</div>`
-                     : p ? `<div><div class="nm">${esc(p.name)}${p.out ? '<span class="tag out">OUT</span>' : ''}</div><div class="meta">${esc(p.team)} ${mu(p)} · ${k(p.salary)} · ${p.median.toFixed(1)} pts · ${ICON[p.tier]}</div></div>`
+                     : p ? `<div><div class="nm">${esc(p.name)}${inj(p)}</div><div class="meta">${esc(p.team)} ${mu(p)} · ${k(p.salary)} · ${p.median.toFixed(1)} pts · ${ICON[p.tier]}</div></div>`
                      : `<div class="nm">— empty — drop or pick a ${SLOT_ELIG[s].join('/')}</div>`;
       return `<div class="${cls}" data-i="${i}"><span class="pos">${s}</span>${body}${p || gone ? `<button class="x" data-rm="${i}" title="Remove">×</button>` : '<span></span>'}</div>`;
     }).join('');
@@ -169,7 +173,7 @@ export default function (component) {
       const cls = ['pr', inlu ? 'inlu' : '', dim ? 'dim' : '', UI.selPlayer === p.dk_id ? 'sel' : ''].join(' ');
       const after = selSlot != null && !inlu ? `<div class="sub left ${la < 0 ? 'neg' : ''}">${la < 0 ? money(-la) + ' over' : money(la) + ' left'}</div>` : '';
       return `<div class="${cls}" data-id="${p.dk_id}" draggable="${!inlu}">
-        <div><div class="nm">${esc(p.name)}${inlu ? '<span class="tag">in lineup</span>' : ''}</div>
+        <div><div class="nm">${esc(p.name)}${inj(p)}${inlu ? '<span class="tag">in lineup</span>' : ''}</div>
              <div class="meta">${esc(p.position)} · ${esc(p.team)} ${mu(p)}</div></div>
         <div class="num">${k(p.salary)}${after}</div>
         <div class="num">${p.median.toFixed(1)} / ${p.ceiling.toFixed(1)}<div class="sub">${p.value.toFixed(2)} pts/$1K</div></div>

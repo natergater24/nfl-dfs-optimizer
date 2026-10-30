@@ -19,7 +19,8 @@ from nfldfs import player_history
 REQUIRED_FILES = ("player_pool.parquet", "lineups.parquet", "swaps.parquet", "sims.npy", "field.npy",
                   "build_meta.json")
 HISTORY_FILES = ("entries.parquet", "player_weeks.parquet")
-OPTIONAL_FILES = ("run_status.json", "results_status.json", "report_card.json")
+OPTIONAL_FILES = ("run_status.json", "results_status.json", "report_card.json", "injury_backups.parquet")
+LINEUP_INJURY = ("inj_tag", "inj_class", "lean", "body_part", "news_headline", "news_story", "news_published")
 MATCHUP_DEFAULTS = {"mu_label": "Neutral", "mu_color": "#8a8a3d", "mu_text": ""}
 
 
@@ -65,6 +66,7 @@ class AppData:
     entries: pd.DataFrame = dc_field(default_factory=pd.DataFrame)
     player_weeks: pd.DataFrame = dc_field(default_factory=pd.DataFrame)
     row_of: dict = dc_field(default_factory=dict)
+    backups: pd.DataFrame = dc_field(default_factory=pd.DataFrame)     # injury_backups.parquet (empty for old builds)
 
     def __post_init__(self):
         self.row_of = {int(d): i for i, d in enumerate(self.pool["dk_id"])}
@@ -77,8 +79,10 @@ def load(pub: Path) -> AppData:
     for col, default in MATCHUP_DEFAULTS.items():          # builds made before matchups existed
         if col not in pool.columns:
             pool[col] = default
+    extra = [c for c in LINEUP_INJURY if c in pool.columns]            # builds made before injury tags have none
     lineups = pd.read_parquet(pub / "lineups.parquet").merge(
-        pool[["dk_id", *MATCHUP_DEFAULTS]], on="dk_id", how="left")
+        pool[["dk_id", *MATCHUP_DEFAULTS, *extra]], on="dk_id", how="left")
+    bk = pub / "injury_backups.parquet"
     return AppData(pool=pool, lineups=lineups, swaps=pd.read_parquet(pub / "swaps.parquet"),
                    sims=np.load(pub / "sims.npy").astype(np.float32),
                    field=np.load(pub / "field.npy").astype(np.int64),
@@ -86,7 +90,8 @@ def load(pub: Path) -> AppData:
                    results_status=_json(pub / "results_status.json"),
                    report_card=_json(pub / "report_card.json"),
                    entries=entries_mod.load_entries(hist / "entries.parquet"),
-                   player_weeks=player_history.load(hist / "player_weeks.parquet"))
+                   player_weeks=player_history.load(hist / "player_weeks.parquet"),
+                   backups=pd.read_parquet(bk) if bk.exists() else pd.DataFrame())
 
 
 def minutes_since(iso: str | None, now: dt.datetime | None = None) -> float | None:

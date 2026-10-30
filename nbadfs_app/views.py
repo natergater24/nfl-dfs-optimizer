@@ -17,7 +17,7 @@ from nbadfs_app import data
 from nfldfs.sim_eval import contest_metric, lineup_scores
 from nfldfs_app import actions, ui
 from nfldfs_app import data as app_data
-from nfldfs_app.view_builder import apply_builder_value
+from nfldfs_app.view_builder import add_injury_fields, apply_builder_value
 
 POSITIONS = ["PG", "SG", "SF", "PF", "C"]
 SLOT_ELIG = {s: [p for p in POSITIONS if p in SLOT_POSITIONS[s]] for s in ROSTER_SLOTS}
@@ -29,7 +29,9 @@ NOT_BUILT_HOSTED = " — the Mac publishes them at 2:00 PM and 6:30 PM ET."
 SORTS = {"Median": "median", "Ceiling": "ceiling", "Value (pts/$1K)": "value", "Ownership": "own_pct",
          "Salary": "salary"}
 BUILDER_FIELDS = ["dk_id", "name", "position", "team", "opp", "salary", "median", "ceiling", "own_pct", "tier",
-                  "score", "value", "mu_color", "mu_text", "mu_label", "out", "slots"]
+                  "score", "value", "mu_color", "mu_text", "mu_label", "out", "slots", "inj", "inj_color", "inj_fg",
+                  "inj_title"]
+INJURED_ONLY = "🩹 Injured / questionable only"
 
 
 # ── helpers (pure, tested) ──────────────────────────────────────────────────────────────────────────────
@@ -57,7 +59,11 @@ KEY_MARKDOWN = (
 
 
 def player_label(row, dk_id=None) -> str:
-    out = "" if bool(row["playable"]) else " · OUT"
+    if "inj_tag" in row.index:
+        chip = ui.row_chip_text(row)
+        out = f" · {chip}" if chip else ""
+    else:                                          # builds made before injury tags
+        out = "" if bool(row["playable"]) else " · OUT"
     return f"{row['name']} · {row['positions']} · {row['team']} · {ui.money(row['salary'])}{out}"
 
 
@@ -68,7 +74,7 @@ def delta_text(delta: float) -> str:
 
 def lineup_table(df: pd.DataFrame):
     view = pd.DataFrame({
-        "Slot": df["slot"].to_numpy(), "Player": df["name"].to_numpy(), "Team": df["team"].to_numpy(),
+        "Slot": df["slot"].to_numpy(), "Player": ui.names_with_chips(df), "Team": df["team"].to_numpy(),
         "Salary": df["salary"].to_numpy(), "Median": df["median"].to_numpy(), "Floor": df["floor"].to_numpy(),
         "Ceiling": df["ceiling"].to_numpy(), "Own %": df["own_pct"].to_numpy(),
         "Tier": df["tier"].map(ui.TIER_ICON).to_numpy()})
@@ -78,18 +84,24 @@ def lineup_table(df: pd.DataFrame):
 
 def pool_table(df: pd.DataFrame):
     view = pd.DataFrame({
-        "Player": df["name"].to_numpy(), "Pos": df["positions"].to_numpy(), "Team": df["team"].to_numpy(),
+        "Player": ui.names_with_chips(df), "Pos": df["positions"].to_numpy(), "Team": df["team"].to_numpy(),
         "Opp": df["opp"].to_numpy(), "Salary": df["salary"].to_numpy(), "Median": df["median"].to_numpy(),
         "Floor": df["floor"].to_numpy(), "Ceiling": df["ceiling"].to_numpy(), "Pts/$1K": df["value"].to_numpy(),
-        "Own %": df["own_pct"].to_numpy(), "Tier": df["tier"].map(ui.TIER_ICON).to_numpy(),
-        "Status": df["status"].fillna("").to_numpy()})
+        "Own %": df["own_pct"].to_numpy(), "Tier": df["tier"].map(ui.TIER_ICON).to_numpy()})
+    if ui.has_injury_data(df):
+        view["News"] = [ui.news_text(r) for _, r in df.iterrows()]
+    else:
+        view["Status"] = df["status"].fillna("").to_numpy()
     return view.style.format({"Salary": "${:,.0f}", "Median": "{:.1f}", "Floor": "{:.1f}", "Ceiling": "{:.1f}",
                               "Pts/$1K": "{:.2f}", "Own %": "{:.1f}%"})
 
 
-def pool_view(pool, positions, tiers, sort_label):
+def pool_view(pool, positions, tiers, sort_label, injured_only=False):
+    """Playable players by position/tier, sorted; with injured_only, every tagged player (any tag) instead."""
     has_pos = pool["positions"].map(lambda s: bool(set(str(s).split("/")) & set(positions)))
-    v = pool[pool["playable"].astype(bool) & has_pos & pool["tier"].isin(tiers)].copy()
+    keep = (pool["inj_tag"].fillna("").astype(str) != "") if injured_only and ui.has_injury_data(pool) \
+        else pool["playable"].astype(bool)
+    v = pool[keep & has_pos & pool["tier"].isin(tiers)].copy()
     v["value"] = v["median"] / (v["salary"] / 1000)
     return v.sort_values(SORTS[sort_label], ascending=False, kind="stable").reset_index(drop=True)
 
@@ -107,6 +119,7 @@ def builder_records(pool: pd.DataFrame, weights: dict, lineup_ids=()) -> list[di
     play["mu_text"] = ["Team implied total (league average — no Vegas line yet)" if m else "Team implied total (Vegas)"
                        for m in play["line_missing"].astype(bool)]
     play["slots"] = [list(s) for s in play["slots"]]
+    add_injury_fields(play)
     recs = play[BUILDER_FIELDS].round(3).to_dict("records")
     for r in recs:
         r["dk_id"], r["salary"], r["out"] = int(r["dk_id"]), int(r["salary"]), bool(r["out"])
@@ -118,10 +131,13 @@ def lineup_status(ids, pool: pd.DataFrame) -> dict:
     picked = [int(i) for i in ids if i is not None]
     gone = [i for i in picked if i not in by.index]
     known = [i for i in picked if i in by.index]
-    out = [by.at[i, "name"] for i in known if not bool(by.at[i, "playable"])]
+    # Builds with injury tags: Nathan's own picks win whatever the tag (⚠ + a backup in 🩹 Injury watch).
+    # Older builds: an unplayable player still blocks the export.
+    out = [] if ui.has_injury_data(pool) else [by.at[i, "name"] for i in known if not bool(by.at[i, "playable"])]
     used = int(by.loc[known, "salary"].sum()) if known else 0
     dupes = len(set(picked)) != len(picked)
     messages = [f"⚠ {n} is now ruled out — swap him before lock." for n in out]
+    messages += ui.pick_warnings(pool, known)
     if gone:
         messages.append("⚠ A player in this lineup is no longer on the slate — swap him.")
     if dupes:
@@ -144,6 +160,48 @@ def lineup_metric(sd: data.SlateData, ids, key: str) -> float:
     sims = data.sims_for(sd)
     return float(contest_metric(lineup_scores(sims, [rows]), data.field_scores_for(sd),
                                 NBA_CONTEST_TYPES[key]["metric"])[0])
+
+
+def device_backups(sd: data.SlateData, ids, key: str) -> pd.DataFrame:
+    """nbadfs.lineups.injury_backups for any full lineup (dk_ids in ROSTER_SLOTS order), computed on this device."""
+    from nfldfs.lineups import BACKUP_COLUMNS
+    picked = [int(i) for i in ids if i is not None]
+    if len(picked) != N_SLOTS or len(set(picked)) != N_SLOTS or any(i not in sd.row_of for i in picked):
+        return pd.DataFrame(columns=BACKUP_COLUMNS)
+    stamp = ("nba", sd.dg, str(sd.meta.get("built_at_utc", "")), key, tuple(picked))
+    return ui.remembered(stamp, lambda: nba_lineups.injury_backups(sd.pool, data.sims_for(sd), data.field_scores_for(sd),
+                                                                   picked, NBA_CONTEST_TYPES[key]))
+
+
+def _watch(sd: data.SlateData, ids, key: str, prefix: str, on_apply, published: bool = False) -> None:
+    """🩹 Injury watch for a lineup: the published backups for the published rank-0 lineup, else on-device ones."""
+    if not ui.has_injury_data(sd.pool):
+        return
+    tagged = ui.tagged_ids(sd.pool, ids)
+    bk = None
+    if tagged:
+        compute = lambda: device_backups(sd, ids, key)      # noqa: E731
+        bk = ui.pick_backups(sd.backups, key, tagged, compute) if published else compute()
+    ui.injury_watch(sd.pool, ids, bk, prefix, on_apply)
+
+
+def _to_my_lineup(new_ids, slot, what="Backup") -> None:
+    st.session_state.nba_my_ids = list(new_ids)
+    st.session_state.nba_focus_slot = slot
+    st.session_state.nba_focus_token = st.session_state.get("nba_focus_token", 0) + 1
+    st.toast(f"{what} copied into 🛠 My Lineup — open that tab.")
+
+
+def _apply_mine(new_ids, slot) -> None:
+    _to_my_lineup(new_ids, slot)
+    st.session_state.nba_flash = (True, "Backup applied to 🛠 My Lineup")
+    st.rerun()
+
+
+def _send_rebuilt(new_ids, slot=None) -> None:
+    st.session_state.nba_my_ids = list(new_ids)
+    st.session_state.nba_flash = (True, "Copied into 🛠 My Lineup" if slot is None else "Backup copied into 🛠 My Lineup")
+    st.rerun()
 
 
 def rebuild(sd: data.SlateData, key: str, locks, excludes, n_candidates: int | None = None):
@@ -309,7 +367,11 @@ def _recommended(sd: data.SlateData, key: str) -> None:
     _metrics(m, int(rec.salary.sum()), rec["median"].sum(), rec["ceiling"].sum())
     m[3].metric(f"{_phrase(key)} in", f"{float(rec.metric.iloc[0]):.0%} of sims", help=SIMS_HELP)
     st.dataframe(lineup_table(rec), hide_index=True, width="stretch")
+    hover = ui.hover_names_html(rec)
+    if hover:
+        st.markdown(hover, unsafe_allow_html=True)
     st.caption(f"{rec.game.nunique()} games · teams: {', '.join(sorted(rec.team.unique()))}")
+    _watch(sd, ids, key, f"nba_rec_{key}", _to_my_lineup, published=True)
     st.download_button("⬇ Download for DraftKings", upload_csv_text([ids]), file_name=f"dk_nba_classic_{key}.csv",
                        mime="text/csv", key=f"nba_dl_{key}")
 
@@ -321,6 +383,9 @@ def _recommended(sd: data.SlateData, key: str) -> None:
             st.markdown(f"**#{r + 1}** — {ui.money(alt.salary.sum()).replace('$', chr(92) + '$')} · "
                         f"{_phrase(key).lower()} in {float(alt.metric.iloc[0]):.0%} of sims")
             st.dataframe(lineup_table(alt), hide_index=True, width="stretch")
+            hover = ui.hover_names_html(alt)
+            if hover:
+                st.markdown(hover, unsafe_allow_html=True)
 
     st.subheader("🔄 One-player swaps (stay under the cap)")
     st.caption(f"The number is how the {_phrase(key).lower()} share moves, in percentage points. A ▼ swap scores "
@@ -337,17 +402,17 @@ def _recommended(sd: data.SlateData, key: str) -> None:
         shown = round(float(s.delta) * 100, 1)
         arrow = "▲" if shown > 0 else "▼" if shown < 0 else "＝"
         c = st.columns([7, 1], vertical_alignment="center")
-        c[0].markdown(f"Swap **{o['name']}** → **{n['name']}** ({n.positions}, {n.team}, {ui.TIER_ICON[n.tier]} "
+        oc = ui.injury_chip(o.get("inj_tag", ""), o.get("lean", ""))
+        nc = ui.injury_chip(n.get("inj_tag", ""), n.get("lean", ""))
+        c[0].markdown(f"Swap **{o['name']}**{' ' + oc if oc else ''} → **{n['name']}**{' ' + nc if nc else ''} "
+                      f"({n.positions}, {n.team}, {ui.TIER_ICON[n.tier]} "
                       f"{n.own_pct:.1f}%) · {'+' if diff >= 0 else '−'}\\${abs(diff):,} · "
-                      f"{arrow} {delta_text(s.delta)}")
+                      f"{arrow} {delta_text(s.delta)}", unsafe_allow_html=True)
         if c[1].button("Apply", key=f"nba_apply_{key}_{i}"):
             new = list(ids)
             slot = new.index(int(s.out_id))
             new[slot] = int(s.in_id)
-            st.session_state.nba_my_ids = new
-            st.session_state.nba_focus_slot = slot
-            st.session_state.nba_focus_token = st.session_state.get("nba_focus_token", 0) + 1
-            st.toast("Swap copied into 🛠 My Lineup — open that tab.")
+            _to_my_lineup(new, slot, what="Swap")
 
 
 def _my_lineup(sd: data.SlateData, key: str, label: str) -> None:
@@ -395,6 +460,9 @@ def _my_lineup(sd: data.SlateData, key: str, label: str) -> None:
         st.session_state.nba_my_ids = new
         st.rerun()
 
+    if status["valid"]:
+        _watch(sd, ids, key, "nba_mine", _apply_mine)
+
     csv = upload_csv_text([status["picked"]]) if status["valid"] else ""
     st.download_button("⬇ Download My Lineup for DraftKings", csv, file_name="dk_nba_classic_my_lineup.csv",
                        mime="text/csv", disabled=not status["valid"], key="nba_dl_mine")
@@ -405,7 +473,8 @@ def _tweak(sd: data.SlateData, key: str, label: str) -> None:
                "lock in a player you want, then rebuild. The app re-picks the other spots around your choices.")
     pool = sd.pool.sort_values("salary", ascending=False, kind="stable")
     all_names = {player_label(r): int(r["dk_id"]) for _, r in pool.iterrows()}
-    play_names = {n: i for n, i in all_names.items() if not n.endswith(" · OUT")}
+    playable = dict(zip(sd.pool["dk_id"].astype(int), sd.pool["playable"].astype(bool)))
+    play_names = {n: i for n, i in all_names.items() if playable.get(i, False)}
     c = st.columns(2)
     locks = [all_names[n] for n in c[0].multiselect("🔒 Lock players (must be in the lineup)", list(all_names),
                                                     key="nba_locks")]
@@ -426,14 +495,14 @@ def _tweak(sd: data.SlateData, key: str, label: str) -> None:
             st.warning(w)
         st.markdown(f"**Rebuilt lineup** — {_phrase(key).lower()} in {rb['metric']:.0%} of sims")
         st.dataframe(lineup_table(_slotted(sd, rb["ids"])), hide_index=True, width="stretch")
+        _watch(sd, rb["ids"], key, "nba_rebuilt", _send_rebuilt)
         if st.button("Send to 🛠 My Lineup", key="nba_send"):
-            st.session_state.nba_my_ids = list(rb["ids"])
-            st.session_state.nba_flash = (True, "Copied into 🛠 My Lineup")
-            st.rerun()
+            _send_rebuilt(rb["ids"])
 
     st.subheader("All players")
     f = st.columns(3)
     pos = f[0].multiselect("Position", POSITIONS, default=POSITIONS, key="nba_pool_pos")
     tiers = f[1].multiselect("Ownership tier", list(ui.TIER_ICON), default=list(ui.TIER_ICON), key="nba_pool_tiers")
     sort = f[2].selectbox("Sort by", list(SORTS), key="nba_pool_sort")
-    st.dataframe(pool_table(pool_view(sd.pool, pos, tiers, sort)), hide_index=True, width="stretch", height=480)
+    hurt = ui.has_injury_data(sd.pool) and st.checkbox(INJURED_ONLY, key="nba_pool_injured")
+    st.dataframe(pool_table(pool_view(sd.pool, pos, tiers, sort, hurt)), hide_index=True, width="stretch", height=480)

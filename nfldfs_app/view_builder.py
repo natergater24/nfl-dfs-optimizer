@@ -9,10 +9,11 @@ import streamlit as st
 from nfldfs.config import CONTEST_TYPES, SALARY_CAP
 from nfldfs.dk_rules import ROSTER_SLOTS, upload_csv_text, validate_lineup
 from nfldfs_app import actions, data, ui
-from nfldfs_app.scoring import published_metric
+from nfldfs_app.scoring import device_backups, published_metric
 
 BUILDER_FIELDS = ["dk_id", "name", "position", "team", "opp", "salary", "median", "ceiling", "own_pct", "tier",
-                  "score", "value", "mu_color", "mu_text", "mu_label", "out"]
+                  "score", "value", "mu_color", "mu_text", "mu_label", "out", "inj", "inj_color", "inj_fg",
+                  "inj_title"]
 SLOT_ELIG = {"QB": ["QB"], "RB": ["RB"], "WR": ["WR"], "TE": ["TE"], "FLEX": ["RB", "WR", "TE"], "DST": ["DST"]}
 _SLOT_ORDER = list(dict.fromkeys(ROSTER_SLOTS))
 
@@ -29,11 +30,24 @@ def builder_records(pool: pd.DataFrame, weights: dict, lineup_ids=()) -> list[di
     play["score"] = (weights.get("floor", 0) * play["floor"] + weights.get("median", 0) * play["median"]
                      + weights.get("ceiling", 0) * play["ceiling"] - weights.get("own_penalty", 0) * play["own_pct"])
     play["value"] = play["median"] / (play["salary"] / 1000)
+    add_injury_fields(play)
     recs = play[BUILDER_FIELDS].round(3).to_dict("records")
     for r in recs:
         r["dk_id"], r["salary"] = int(r["dk_id"]), int(r["salary"])
         r["slots"] = player_slots(r["position"])
     return recs
+
+
+def add_injury_fields(play: pd.DataFrame) -> None:
+    """Builder-card tag fields (shared with the 🏀 page): chip text, colors and the news tooltip."""
+    if ui.has_injury_data(play):
+        tags = play["inj_tag"].fillna("").astype(str).str.upper()
+        play["inj"] = [ui.chip_text(t, ln) for t, ln in zip(tags, play["lean"].fillna(""))]
+        play["inj_color"] = [ui.CHIP_STYLE.get(t, ui._OTHER_TAG)[0] if t else "" for t in tags]
+        play["inj_fg"] = [ui.CHIP_STYLE.get(t, ui._OTHER_TAG)[1] if t else "" for t in tags]
+        play["inj_title"] = [ui.news_tooltip(r) for _, r in play.iterrows()]
+    else:
+        play["inj"] = play["inj_color"] = play["inj_fg"] = play["inj_title"] = ""
 
 
 def apply_builder_value(value, seen, current):
@@ -49,10 +63,14 @@ def lineup_status(ids, pool: pd.DataFrame) -> dict:
     picked = [int(i) for i in ids if i is not None]
     gone = [i for i in picked if i not in by.index]
     known = [i for i in picked if i in by.index]
-    out = [by.at[i, "name"] for i in known if not bool(by.at[i, "playable"])]
+    tagged = ui.has_injury_data(pool)
+    # Builds with injury tags: Nathan's own picks win whatever the tag (⚠ + a backup below). Older builds: an
+    # unplayable player still blocks the export.
+    out = [] if tagged else [by.at[i, "name"] for i in known if not bool(by.at[i, "playable"])]
     used = int(by.loc[known, "salary"].sum()) if known else 0
     dupes = len(set(picked)) != len(picked)
     messages = [f"⚠ {n} is now ruled out — swap him before lock." for n in out]
+    messages += ui.pick_warnings(pool, known)
     if gone:
         messages.append("⚠ A player in this lineup is no longer on the slate — swap him.")
     if dupes:
@@ -64,6 +82,14 @@ def lineup_status(ids, pool: pd.DataFrame) -> dict:
     valid = (len(picked) == 9 and not gone and not out and not dupes
              and validate_lineup(by.loc[known].reset_index()) == [])
     return {"picked": picked, "used": used, "valid": valid, "messages": messages}
+
+
+def _apply_mine(new_ids, slot) -> None:
+    st.session_state.my_ids = new_ids
+    st.session_state.focus_slot = slot
+    st.session_state.focus_token = st.session_state.get("focus_token", 0) + 1
+    st.session_state.flash = (True, "Backup applied to 🛠 My Lineup")
+    st.rerun()
 
 
 def render(d, key, label, field_scores):
@@ -117,6 +143,10 @@ def render(d, key, label, field_scores):
     if new is not None:
         st.session_state.my_ids = new
         st.rerun()
+
+    if ui.has_injury_data(d.pool) and status["valid"]:
+        ui.injury_watch(d.pool, ids, device_backups(d, ids, key, field_scores) if ui.tagged_ids(d.pool, ids) else None,
+                        "mine", _apply_mine)
 
     csv = upload_csv_text([by.loc[status["picked"]].reset_index()]) if status["valid"] else ""
     hosted = data.is_hosted()

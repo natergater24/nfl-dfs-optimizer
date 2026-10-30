@@ -95,7 +95,7 @@ def _matchup(df: pd.DataFrame):
 
 def styled_lineup(df: pd.DataFrame):
     view = pd.DataFrame({
-        "Pos": df["slot"].to_numpy(), "Player": df["name"].to_numpy(), "Team": df["team"].to_numpy(),
+        "Pos": df["slot"].to_numpy(), "Player": names_with_chips(df), "Team": df["team"].to_numpy(),
         "Matchup": _matchup(df), "Salary": df["salary"].to_numpy(), "Median": df["median"].to_numpy(),
         "Floor": df["floor"].to_numpy(), "Ceiling": df["ceiling"].to_numpy(), "Own %": df["own_pct"].to_numpy(),
         "Tier": df["tier"].map(TIER_ICON).to_numpy()})
@@ -106,14 +106,23 @@ def styled_lineup(df: pd.DataFrame):
 
 def styled_pool(df: pd.DataFrame):
     view = pd.DataFrame({
-        "Player": df["name"].to_numpy(), "Pos": df["position"].to_numpy(), "Team": df["team"].to_numpy(),
+        "Player": names_with_chips(df), "Pos": df["position"].to_numpy(), "Team": df["team"].to_numpy(),
         "Matchup": _matchup(df), "Salary": df["salary"].to_numpy(), "Median": df["median"].to_numpy(),
         "Floor": df["floor"].to_numpy(), "Ceiling": df["ceiling"].to_numpy(),
         "Boom %": (df["boom_rate"] * 100).to_numpy(), "Pts/$1K": df["value"].to_numpy(),
         "Own %": df["own_pct"].to_numpy(), "Tier": df["tier"].map(TIER_ICON).to_numpy()})
+    if has_injury_data(df):
+        view["News"] = [news_text(r) for _, r in df.iterrows()]
     return (view.style.apply(_matchup_css(df["mu_color"].tolist()), subset=["Matchup"])
             .format({"Salary": "${:,.0f}", "Median": "{:.1f}", "Floor": "{:.1f}", "Ceiling": "{:.1f}",
                      "Boom %": "{:.0f}%", "Pts/$1K": "{:.2f}", "Own %": "{:.1f}%"}))
+
+
+def _tag_lean(by_id, dk_id) -> tuple[str, str]:
+    if "inj_tag" not in by_id.columns or int(dk_id) not in by_id.index:
+        return "", ""
+    r = by_id.loc[int(dk_id)]
+    return r.get("inj_tag", ""), r.get("lean", "")
 
 
 def swap_line(s, pool_by_id) -> str:
@@ -121,7 +130,10 @@ def swap_line(s, pool_by_id) -> str:
     sign = "+" if s.salary_delta > 0 else "−"
     tag = (f"<span style='background:{p['mu_color']};color:#fff;font-weight:600;font-size:12px;"
            f"padding:1px 6px;border-radius:4px'>vs {p['opp']} · {p['mu_label']}</span>")
-    return (f"Swap **{s.out_name}** → **{s.in_name}** ({s.position}, {s.in_team}, {TIER_ICON[s.in_tier]} "
+    oc = injury_chip(*_tag_lean(pool_by_id, s.out_dk_id))
+    ic = injury_chip(*_tag_lean(pool_by_id, s.in_dk_id))
+    oc, ic = (" " + oc if oc else ""), (" " + ic if ic else "")
+    return (f"Swap **{s.out_name}**{oc} → **{s.in_name}**{ic} ({s.position}, {s.in_team}, {TIER_ICON[s.in_tier]} "
             f"{s.in_own_pct:.1f}%) {tag} · {sign}\\${abs(int(s.salary_delta)):,} · "
             f"\\${int(s.remaining_salary):,} left · ceiling {s.ceiling_delta:+.1f}")
 
@@ -165,3 +177,266 @@ def styled_player_history(table: pd.DataFrame):
 def signed_money(v) -> str:
     v = float(v)
     return f"{'+' if v >= 0 else '−'}${abs(v):,.0f}"
+
+
+# ── injuries (shared by the 🏈 and 🏀 pages) ──────────────────────────────────────────────────────────────
+
+INJURY_COLUMNS = ("inj_tag", "inj_class", "lean", "body_part", "news_headline", "news_story", "news_published",
+                  "recommendable", "play_prob")
+# tag -> (background, text color, emoji for plain-text places such as select labels and table cells)
+CHIP_STYLE = {"Q": ("#f2c94c", "#1a1a1a", "🟡"), "GTD": ("#f2c94c", "#1a1a1a", "🟡"),
+              "D": ("#f2994a", "#1a1a1a", "🟠"), "OUT": ("#eb5757", "#ffffff", "🔴"),
+              "IR": ("#eb5757", "#ffffff", "🔴"), "P": ("#9e9e9e", "#ffffff", "⚪")}
+_OTHER_TAG = ("#eb5757", "#ffffff", "🔴")            # anything unfamiliar (suspended, …) is never suggested
+LEAN_TEXT = {"out": "📰 leans out", "in": "📰 leans in"}
+TAG_WORD = {"OUT": "Out", "D": "Doubtful", "IR": "on IR"}
+
+
+def has_injury_data(df) -> bool:
+    """True for pools published with the injury columns (older builds have none: no chips, no Injury watch)."""
+    return df is not None and "inj_tag" in getattr(df, "columns", ())
+
+
+def _s(v) -> str:
+    if v is None or (isinstance(v, float) and v != v):
+        return ""
+    return str(v).strip()
+
+
+def _lean_of(tag: str, lean) -> str:
+    return LEAN_TEXT.get(_s(lean).lower(), "") if tag in ("Q", "GTD") else ""
+
+
+def injury_chip(tag, lean=None) -> str:
+    """HTML chip for an injury tag (Q/GTD yellow, D orange, OUT/IR red, P gray), plus the news lean; "" when healthy."""
+    import html
+    t = _s(tag).upper()
+    if not t:
+        return ""
+    bg, fg, _ = CHIP_STYLE.get(t, _OTHER_TAG)
+    chip = (f"<span style='background:{bg};color:{fg};font-weight:700;font-size:12px;padding:1px 6px;"
+            f"border-radius:4px;white-space:nowrap'>{html.escape(t)}</span>")
+    ln = _lean_of(t, lean)
+    return chip + (f" <span style='font-size:12px;white-space:nowrap'>{ln}</span>" if ln else "")
+
+
+def chip_text(tag, lean=None) -> str:
+    """Plain-text chip for select labels and table cells ("🟡 Q · 📰 leans out"); "" when healthy."""
+    t = _s(tag).upper()
+    if not t:
+        return ""
+    ln = _lean_of(t, lean)
+    return f"{CHIP_STYLE.get(t, _OTHER_TAG)[2]} {t}" + (f" · {ln}" if ln else "")
+
+
+def row_chip_text(row) -> str:
+    return chip_text(row.get("inj_tag", ""), row.get("lean", "")) if hasattr(row, "get") else ""
+
+
+def news_age(published, now: dt.datetime | None = None) -> str:
+    """"just now", "N min ago", "N h ago", "N d ago" from a UTC ISO timestamp; "" when unknown."""
+    p = _s(published)
+    if not p:
+        return ""
+    try:
+        then = dt.datetime.fromisoformat(p.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=dt.timezone.utc)
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=dt.timezone.utc)
+    mins = (now - then).total_seconds() / 60
+    if mins < 1:
+        return "just now"
+    if mins < 60:
+        return f"{int(mins)} min ago"
+    if mins < 24 * 60:
+        return f"{int(mins // 60)} h ago"
+    return f"{int(mins // 1440)} d ago"
+
+
+def news_text(row, now: dt.datetime | None = None) -> str:
+    """"Headline (2 h ago)" for the pool tables' News column; "" without news."""
+    head = _s(row.get("news_headline", ""))
+    if not head:
+        return ""
+    age = news_age(row.get("news_published", ""), now)
+    return f"{head} ({age})" if age else head
+
+
+def news_tooltip(row, now: dt.datetime | None = None) -> str:
+    """Hover text for a player's name: tag + body part, then the latest headline (age) and story.
+    Players without news get their tag only; healthy players without news get ""."""
+    tag = _s(row.get("inj_tag", "")).upper()
+    first = " · ".join(x for x in (chip_text(tag, row.get("lean", "")), _s(row.get("body_part", ""))) if x)
+    head, story = _s(row.get("news_headline", "")), _s(row.get("news_story", ""))
+    lines = [first] if first else []
+    if head:
+        age = news_age(row.get("news_published", ""), now)
+        lines.append(f"{head} ({age})" if age else head)
+        if story:
+            lines.append(story)
+    return "\n".join(lines)
+
+
+def names_with_chips(df: pd.DataFrame) -> list[str]:
+    """The lineup/pool tables' Player cells: the name plus a plain-text chip for tagged players."""
+    if not has_injury_data(df):
+        return df["name"].astype(str).tolist()
+    out = []
+    for name, tag, ln in zip(df["name"], df["inj_tag"], df["lean"] if "lean" in df else [""] * len(df)):
+        c = chip_text(tag, ln)
+        out.append(f"{name} · {c}" if c else str(name))
+    return out
+
+
+def hover_names_html(df: pd.DataFrame, now: dt.datetime | None = None) -> str:
+    """Recommended lineups: every player's name with an HTML title tooltip holding his latest news
+    (st.dataframe does not render pandas Styler tooltips). "" for builds without injury data."""
+    import html
+    if not has_injury_data(df):
+        return ""
+    parts = []
+    for _, r in df.iterrows():
+        tip = news_tooltip(r, now)
+        chip = injury_chip(r.get("inj_tag", ""), r.get("lean", ""))
+        name = html.escape(str(r["name"]))
+        if tip:
+            tip = html.escape(tip, quote=True).replace("\r", "").replace("\n", "&#10;")   # one markdown line
+            name = (f"<span title=\"{tip}\" style='cursor:help;"
+                    f"text-decoration:underline dotted'>{name}</span>")
+        parts.append(name + (f" {chip}" if chip else ""))
+    return ("<div style='font-size:13px;line-height:1.9'>📰 <span style='opacity:.7'>Hover a name for news:</span> "
+            + " · ".join(parts) + "</div>")
+
+
+def injury_warnings(pool: pd.DataFrame, ids) -> list[str]:
+    """⚠ for each chosen player the app would never pick itself: excluded tag (Out/Doubtful/IR/…) or news
+    leaning out. Same wording as nbadfs.lineups.out_lock_warnings. Empty for builds without injury data."""
+    if not has_injury_data(pool):
+        return []
+    by = pool.drop_duplicates("dk_id").set_index(pool.drop_duplicates("dk_id")["dk_id"].astype("int64"))
+    out = []
+    for i in ids:
+        if i is None or int(i) not in by.index:
+            continue
+        r = by.loc[int(i)]
+        tag = _s(r.get("inj_tag", "")).upper()
+        if _s(r.get("inj_class", "")) == "excluded":
+            out.append(f"⚠ {r['name']} is listed {TAG_WORD.get(tag, tag or 'Out')}")
+        elif tag in ("Q", "GTD") and _s(r.get("lean", "")).lower() == "out":
+            out.append(f"⚠ {r['name']}: news leans out")
+    return out
+
+
+def pick_warnings(pool: pd.DataFrame, ids) -> list[str]:
+    """My Lineup: the ⚠ for Nathan's own picks the app would never make; his pick stands."""
+    return [f"{w} — your pick stands; see 🩹 Injury watch for a backup." for w in injury_warnings(pool, ids)]
+
+
+def _ids(v) -> list[int]:
+    if v is None:
+        return []
+    return [int(x) for x in list(v)]
+
+
+def backup_line(b, name_of: dict) -> str:
+    """"If X sits: Y — $1,200 left, 31% → 29%" (markdown, $ escaped) for one injury_backups row."""
+    outs, ins = _ids(b["out_dk_ids"]), _ids(b["in_dk_ids"])
+    who = name_of.get(int(b["tagged_dk_id"]), "He")
+    if b["kind"] == "none" or not ins:
+        return f"If **{who}** sits: {b['message']}"
+    names = ", ".join(f"**{name_of.get(i, i)}**" for i in ins)
+    extra = [name_of.get(o, o) for o in outs if o != int(b["tagged_dk_id"])]
+    also = f" (also moves out {', '.join(map(str, extra))})" if extra else ""
+    return (f"If **{who}** sits: {names}{also} — \\${int(b['remaining_salary']):,} left, "
+            f"{float(b['metric_before']):.0%} → {float(b['metric_after']):.0%}")
+
+
+def apply_backup(ids, out_ids, in_ids) -> tuple[list, int]:
+    """Replace each player moving out with the matching player coming in (same slot). Returns (ids, first slot)."""
+    new = [None if i is None else int(i) for i in ids]
+    first = None
+    for o, n in zip(_ids(out_ids), _ids(in_ids)):
+        slot = new.index(int(o))
+        new[slot] = int(n)
+        first = slot if first is None else first
+    return new, (first if first is not None else 0)
+
+
+def pick_backups(published, key: str, tagged_ids, compute):
+    """The published backups when they cover every tagged player of the shown (published rank-0) lineup;
+    otherwise compute them on this device."""
+    tagged = {int(i) for i in tagged_ids}
+    if published is not None and len(published) and {"contest_key", "tagged_dk_id"} <= set(published.columns):
+        pb = published[published["contest_key"] == key]
+        if tagged <= set(pb["tagged_dk_id"].astype("int64")):
+            return pb[pb["tagged_dk_id"].astype("int64").isin(tagged)].reset_index(drop=True)
+    return compute()
+
+
+def remembered(cache_key: tuple, compute):
+    """On-device backups take a fraction of a second; remember the last few per browser session so reruns
+    (every click) don't recompute them."""
+    import streamlit as st
+    memo = st.session_state.setdefault("_injury_backups_memo", {})
+    if cache_key not in memo:
+        if len(memo) >= 16:
+            memo.pop(next(iter(memo)))
+        memo[cache_key] = compute()
+    return memo[cache_key]
+
+
+def tagged_ids(pool: pd.DataFrame, ids) -> list[int]:
+    if not has_injury_data(pool):
+        return []
+    by = pool.drop_duplicates("dk_id").set_index(pool.drop_duplicates("dk_id")["dk_id"].astype("int64"))
+    return [int(i) for i in ids if i is not None and int(i) in by.index and _s(by.at[int(i), "inj_tag"])]
+
+
+def injury_watch(pool: pd.DataFrame, ids, backups, key_prefix: str, on_apply, now: dt.datetime | None = None) -> None:
+    """🩹 Injury watch: per tagged player in the lineup — chip, body part, headline + age (story on expand) and
+    the backup line with an Apply button. `on_apply(new_ids, slot)` runs when Apply is clicked. Nothing for
+    builds without injury data."""
+    import html
+
+    import streamlit as st
+    if not has_injury_data(pool):
+        return
+    tagged = tagged_ids(pool, ids)
+    by = pool.drop_duplicates("dk_id").set_index(pool.drop_duplicates("dk_id")["dk_id"].astype("int64"))
+    name_of = {int(i): str(n) for i, n in zip(by.index, by["name"])}
+    with st.expander("🩹 Injury watch", expanded=bool(tagged)):
+        if not tagged:
+            st.caption("No injury tags in this lineup.")
+            return
+        bk = backups if backups is not None else pd.DataFrame()
+        for t in tagged:
+            r = by.loc[t]
+            bits = [f"**{html.escape(str(r['name']))}** {injury_chip(r.get('inj_tag', ''), r.get('lean', ''))}"]
+            if _s(r.get("body_part", "")):
+                bits.append(html.escape(_s(r["body_part"])))
+            head = _s(r.get("news_headline", ""))
+            if head:
+                age = news_age(r.get("news_published", ""), now)
+                bits.append(f"📰 {html.escape(head)}" + (f" <span style='opacity:.7'>({age})</span>" if age else ""))
+            else:
+                bits.append("<span style='opacity:.7'>no news yet</span>")
+            text = " · ".join(bits)
+            story = _s(r.get("news_story", ""))
+            if story:
+                text += (f"<details><summary style='cursor:pointer;font-size:13px'>Full story</summary>"
+                         f"<div style='font-size:13px'>{html.escape(story)}</div></details>")
+            st.markdown(text, unsafe_allow_html=True)
+            rows = bk[bk["tagged_dk_id"].astype("int64") == t] if len(bk) else bk
+            if not len(rows):
+                st.caption("No backup computed for this player.")
+                continue
+            b = rows.iloc[0]
+            c = st.columns([7, 1], vertical_alignment="center")
+            c[0].markdown(backup_line(b, name_of))
+            if b["kind"] != "none" and c[1].button("Apply", key=f"{key_prefix}_backup_{t}"):
+                new, slot = apply_backup(ids, b["out_dk_ids"], b["in_dk_ids"])
+                on_apply(new, slot)

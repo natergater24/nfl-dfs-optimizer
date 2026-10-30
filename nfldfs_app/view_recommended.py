@@ -6,7 +6,7 @@ import streamlit as st
 from nfldfs.config import CONTEST_TYPES, SALARY_CAP
 from nfldfs.dk_rules import upload_csv_text
 from nfldfs_app import ui
-from nfldfs_app.scoring import published_metric
+from nfldfs_app.scoring import device_backups, published_metric
 
 
 def stack_summary(lu) -> str:
@@ -28,6 +28,13 @@ def apply_swap(rec_ids, out_id, in_id) -> tuple[list[int], int]:
     return ids, slot
 
 
+def _copy_to_my_lineup(new_ids, slot, what="Backup") -> None:
+    st.session_state.my_ids = new_ids
+    st.session_state.focus_slot = slot
+    st.session_state.focus_token = st.session_state.get("focus_token", 0) + 1
+    st.toast(f"{what} copied into 🛠 My Lineup — open that tab.")
+
+
 def render(d, key, label, field_scores):
     contest = CONTEST_TYPES[key]
     rec = d.lineups[(d.lineups.contest_key == key) & (d.lineups["rank"] == 0)]
@@ -40,7 +47,15 @@ def render(d, key, label, field_scores):
     m[3].metric(f"{ui.metric_phrase(key, contest['group'])} in",
                 f"{published_metric(d, ids, key, field_scores):.0%} of sims", help=ui.MODEL_RELATIVE_HELP)
     st.dataframe(ui.styled_lineup(rec), hide_index=True, width="stretch")
+    hover = ui.hover_names_html(rec)
+    if hover:
+        st.markdown(hover, unsafe_allow_html=True)
     st.caption(stack_summary(rec))
+    if ui.has_injury_data(d.pool):
+        tagged = ui.tagged_ids(d.pool, ids)
+        bk = (ui.pick_backups(d.backups, key, tagged, lambda: device_backups(d, ids, key, field_scores))
+              if tagged else None)
+        ui.injury_watch(d.pool, ids, bk, f"rec_{key}", _copy_to_my_lineup)
     st.download_button("⬇ Download DraftKings upload CSV", upload_csv_text([rec]), file_name=f"dk_classic_{key}.csv",
                        mime="text/csv", key=f"dl_{key}")
 
@@ -53,6 +68,9 @@ def render(d, key, label, field_scores):
                         f"{ui.metric_phrase(key, contest['group']).lower()} in "
                         f"{published_metric(d, alt.dk_id.astype(int).tolist(), key, field_scores):.0%} of sims")
             st.dataframe(ui.styled_lineup(alt), hide_index=True, width="stretch")
+            hover = ui.hover_names_html(alt)
+            if hover:
+                st.markdown(hover, unsafe_allow_html=True)
 
     st.subheader("💎 Outliers — swaps that keep you under the cap")
     sw = d.swaps[d.swaps.contest_key == key]
@@ -63,11 +81,7 @@ def render(d, key, label, field_scores):
         c = st.columns([7, 1], vertical_alignment="center")
         c[0].markdown(ui.swap_line(s, by_id), unsafe_allow_html=True)
         if c[1].button("Apply", key=f"apply_{key}_{i}"):
-            new_ids, slot = apply_swap(ids, s.out_dk_id, s.in_dk_id)
-            st.session_state.my_ids = new_ids
-            st.session_state.focus_slot = slot
-            st.session_state.focus_token = st.session_state.get("focus_token", 0) + 1
-            st.toast("Swap copied into 🛠 My Lineup — open that tab.")
+            _copy_to_my_lineup(*apply_swap(ids, s.out_dk_id, s.in_dk_id), what="Swap")
 
     with st.expander("📈 Report card — projections vs. actual results"):
         ui.report_card_widget(d.report_card)
