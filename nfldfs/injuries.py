@@ -59,12 +59,12 @@ _IN = ["expected to play", "will play", "on track to play", "on track to return 
 # "rest day", "veteran rest", "maintenance") are deliberately not matched: they are neutral.
 
 _PHRASES = [(p, "out") for p in _OUT] + [(p, "in") for p in _IN]
-_RAW = {"is out": r"is\s+out(?!\s+of\s+practice)"}  # "out of practice" is practice-only
+_RAW = {"is out": r"\bis\s+out\b(?!\s+of\s+practice)"}  # "out of practice" is practice-only
 _PHRASE_RE = re.compile("|".join(r"(?P<p%d>%s)" % (i, _RAW.get(p) or re.escape(p).replace(r"\ ", r"\s+"))
                                  for i, (p, _) in enumerate(_PHRASES)))
 # A game-in phrase that points at a later game ("expected to play next week") does not count.
 _FUTURE = re.compile(r"next\s+(week|game|sunday|monday|thursday|matchup)|later\s+this\s+season"
-                     r"|week\s+\d+(?!\s+(prep|practice|preparation))|after\s+the\s+bye|return\s+next")
+                     r"|week\s+\d+\b(?!\s+(prep|practice|preparation))|after\s+the\s+bye|return\s+next")
 _CLAUSE_END = re.compile(r"[.;]|\bbut\b")
 _TOKEN = re.compile(r"[\w']+|[,.;:!?()\-]")
 _NEGATORS = {"not", "isn't", "aren't", "wasn't", "weren't", "never", "cannot"}
