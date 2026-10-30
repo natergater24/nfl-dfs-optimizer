@@ -38,8 +38,18 @@ def load(path) -> pd.DataFrame:
     return _coerce(pd.read_parquet(path)) if path.exists() else empty()
 
 
+def projected(pool: pd.DataFrame) -> pd.Series:
+    """Players the build actually projected to play: DraftKings-playable and, on injury-aware pools, not a
+    questionable player whose news leans out. Those are simulated as sitting (median 0), so a row for them
+    would score a big projection miss whenever they do play; like Doubtful/Out players they are left out."""
+    keep = pool["playable"].astype(bool)
+    if "recommendable" in pool.columns:
+        keep = keep & pool["recommendable"].fillna(True).astype(bool)
+    return keep
+
+
 def slate_rows(pool: pd.DataFrame, slate_date: str) -> pd.DataFrame:
-    p = pool[pool["playable"]].copy()
+    p = pool[projected(pool)].copy()
     if "mu_label" not in p.columns:
         p["mu_label"] = "Neutral"
     if "mu_color" not in p.columns:

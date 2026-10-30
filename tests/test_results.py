@@ -102,3 +102,14 @@ def test_match_share_counts_standings_players_on_the_slate(tmp_path):
     s2 = results.read_standings(_zip(tmp_path / "d.zip", other))
     assert results.match_share(s2, _snapshot()) == pytest.approx(3 / 5)
     assert results.MIN_STANDINGS_MATCH == 0.80
+
+
+def test_match_to_slate_leaves_out_lean_out_players(tmp_path):
+    # AAA WR1 is Q with news leaning out (median 0 in the build): he scored 18.3, which is no projection miss
+    s = results.read_standings(_zip(tmp_path / "c.zip"))
+    snap = _snapshot()
+    snap["recommendable"] = snap["playable"]
+    snap.loc[snap["name"] == "AAA WR1", ["recommendable", "median"]] = [False, 0.0]
+    rows = results.match_to_slate(s, snap, "2026-10-18", "154941")
+    assert "AAA WR1" not in set(rows["name"]) and "AAA QB1" in set(rows["name"])
+    assert results.report_card(rows)["latest"]["scored"] == 2

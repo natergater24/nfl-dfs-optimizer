@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .player_history import projected
 from .status import atomic_write_parquet
 from .teams import normalize_name
 
@@ -91,7 +92,8 @@ def match_share(standings: pd.DataFrame, snapshot: pd.DataFrame) -> float:
 def match_to_slate(standings: pd.DataFrame, snapshot: pd.DataFrame, slate_date: str,
                    draft_group_id) -> pd.DataFrame:
     actual = standings.assign(k=standings["name"].map(normalize_name)).drop_duplicates("k").set_index("k")
-    snap = snapshot[snapshot["playable"]].copy() if "playable" in snapshot.columns else snapshot.copy()
+    # only players the build projected to play (a lean-out Q player has median 0: no honest projection)
+    snap = snapshot[projected(snapshot)].copy() if "playable" in snapshot.columns else snapshot.copy()
     k = snap["name"].map(normalize_name)
     snap["actual_own"] = k.map(actual["actual_own"]).fillna(0.0)
     snap["actual_pts"] = k.map(actual["actual_pts"])

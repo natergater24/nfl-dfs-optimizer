@@ -86,3 +86,15 @@ def test_search_two_entries_same_slate_and_float_columns():
     assert summary["times_played"] == 2
     assert table.iloc[0]["My entry"] == "A \u00b7 \u2705 +$25; B \u00b7 \u2717 \u2212$5"
     assert str(table["Actual"].dtype) == "float64"
+
+
+def test_slate_rows_leave_out_lean_out_questionable_players():
+    # a Q player whose news leans out is simulated as sitting (median 0): no honest projection to grade
+    p = _pool()
+    p["recommendable"] = True
+    out_name, q_name = p["name"].iloc[0], p["name"].iloc[1]
+    p.loc[p["name"] == out_name, ["recommendable", "median"]] = [False, 0.0]
+    rows = ph.slate_rows(p, "2026-10-25")
+    assert out_name not in set(rows["name"]) and q_name in set(rows["name"])
+    assert (rows["median"] > 0).all()
+    assert len(ph.slate_rows(p.drop(columns=["recommendable"]), "2026-10-25")) == len(rows) + 1  # old pools
