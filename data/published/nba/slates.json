@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "draft_group_id": 154398,
+    "name": "Main",
+    "start": "2026-10-30T19:00:00",
+    "games": 8,
+    "published": true
+  },
+  {
+    "draft_group_id": 155925,
+    "name": "Turbo",
+    "start": "2026-10-30T19:30:00",
+    "games": 4,
+    "published": true
+  },
+  {
+    "draft_group_id": 155927,
+    "name": "Turbo",
+    "start": "2026-10-30T20:00:00",
+    "games": 3,
+    "published": true
+  },
+  {
+    "draft_group_id": 155928,
+    "name": "Night",
+    "start": "2026-10-30T22:00:00",
+    "games": 2,
+    "published": true
+  }
+]
