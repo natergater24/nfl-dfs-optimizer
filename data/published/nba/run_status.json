@@ -1,37 +1,36 @@
 {
   "stage": "nba",
-  "started": "2026-10-28T18:30:04",
-  "finished": "2026-10-28T18:30:49",
+  "started": "2026-10-29T21:13:51",
+  "finished": "2026-10-29T21:13:52",
   "ok": true,
   "steps": [
     {
       "name": "nba_salaries",
-      "started": "2026-10-28T18:30:04",
-      "finished": "2026-10-28T18:30:05",
+      "started": "2026-10-29T21:13:51",
+      "finished": "2026-10-29T21:13:52",
       "ok": true,
-      "message": "3 NBA Classic slate(s): Main (9 games), Turbo (4 games), Night (2 games)"
+      "message": "skipped: no NBA Classic slate today"
     },
     {
       "name": "nba_vegas_if_stale",
-      "started": "2026-10-28T18:30:05",
-      "finished": "2026-10-28T18:30:07",
+      "started": "2026-10-29T21:13:52",
+      "finished": "2026-10-29T21:13:52",
       "ok": true,
-      "message": "18 NBA games listed; Odds API requests remaining: 443"
+      "message": "skipped: no NBA Classic slate today"
     },
     {
       "name": "nba_stats_if_missing",
-      "started": "2026-10-28T18:30:07",
-      "finished": "2026-10-28T18:30:07",
+      "started": "2026-10-29T21:13:52",
+      "finished": "2026-10-29T21:13:52",
       "ok": true,
-      "message": "season stats 2026 and 2027 ready"
+      "message": "skipped: no NBA Classic slate today"
     },
     {
       "name": "nba_build",
-      "started": "2026-10-28T18:30:07",
-      "finished": "2026-10-28T18:30:49",
+      "started": "2026-10-29T21:13:52",
+      "finished": "2026-10-29T21:13:52",
       "ok": true,
-      "message": "3 of 3 NBA slate(s) built"
+      "message": "skipped: no NBA Classic slate today"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
