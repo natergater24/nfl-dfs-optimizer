@@ -233,6 +233,77 @@ def fetch_news(espn_id, sport, session=None) -> dict | None:
             "published": pub.isoformat() if pub else ""}
 
 
+ESPN_TEAMS_URL = "https://site.api.espn.com/apis/site/v2/sports/{path}/teams"
+ESPN_ROSTER_URL = "https://site.api.espn.com/apis/site/v2/sports/{path}/teams/{team_id}/roster"
+
+
+def _roster_athletes(data) -> list[dict]:
+    """Athletes from an ESPN roster: NFL groups each with items[], NBA a flat list (handle both)."""
+    out = []
+    for entry in (data.get("athletes") if isinstance(data, dict) else None) or []:
+        if isinstance(entry, dict) and isinstance(entry.get("items"), list):
+            out.extend(a for a in entry["items"] if isinstance(a, dict))
+        elif isinstance(entry, dict):
+            out.append(entry)
+    return out
+
+
+def fill_espn_ids(pool, sport, rows, *, session=None, sleep=time.sleep) -> str:
+    """Fallback for players Sleeper has no ESPN id for: look them up on ESPN's team rosters.
+
+    `rows` are positional row numbers that need an id; only those players' teams are fetched, each once.
+    Fills pool["espn_id"] in place. Returns a warning ("" if fine); never raises."""
+    todo: dict[str, list[int]] = {}
+    for i in rows:
+        if not pool["espn_id"].iat[i]:
+            todo.setdefault(_canon_team(pool["team"].iat[i]), []).append(i)
+    if not todo:
+        return ""
+    path = ESPN_PATH[sport]
+    state = {"requests": 0, "failures": 0, "warning": ""}
+
+    def get(url):
+        if state["failures"] >= MAX_NEWS_FAILURES:
+            raise ConnectionError("ESPN roster lookups unavailable")
+        try:
+            if state["requests"]:
+                sleep(config.NEWS_DELAY_S)
+            state["requests"] += 1
+            data = _get_json(url, session)
+            state["failures"] = 0
+            return data
+        except Exception as exc:  # noqa: BLE001
+            state["failures"] += 1
+            if not state["warning"]:
+                state["warning"] = f"; WARNING: injury news unavailable ({type(exc).__name__})"
+            raise
+
+    try:
+        teams = get(ESPN_TEAMS_URL.format(path=path))["sports"][0]["leagues"][0]["teams"]
+        ids = {_canon_team(t["team"]["abbreviation"]): str(t["team"]["id"]) for t in teams}
+    except Exception:  # noqa: BLE001
+        return state["warning"]
+    for team, idxs in todo.items():
+        if team not in ids:
+            continue
+        try:
+            athletes = _roster_athletes(get(ESPN_ROSTER_URL.format(path=path, team_id=ids[team])))
+        except Exception:  # noqa: BLE001
+            if state["failures"] >= MAX_NEWS_FAILURES:
+                break
+            continue
+        by_name: dict[str, list[str]] = {}
+        for a in athletes:
+            nm = a.get("fullName") or a.get("displayName")
+            if nm and a.get("id"):
+                by_name.setdefault(normalize_name(nm), []).append(str(a["id"]))
+        for i in idxs:
+            cands = by_name.get(normalize_name(pool["name"].iat[i]), [])
+            if len(cands) == 1:
+                pool.iat[i, pool.columns.get_loc("espn_id")] = cands[0]
+    return state["warning"]
+
+
 # ---------------------------------------------------------------- the pool
 
 def add_injury_columns(pool, sport, *, now, session=None, news_for=None, sleep=time.sleep):
@@ -259,6 +330,11 @@ def add_injury_columns(pool, sport, *, now, session=None, news_for=None, sleep=t
         now = now.replace(tzinfo=dt.timezone.utc)
     wanted = set(news_for or ())
     dk = out["dk_id"] if "dk_id" in out.columns else pd.Series([None] * n, index=out.index)
+    need = [i for i in range(n) if out["inj_tag"].iat[i] != "" or dk.iat[i] in wanted]
+    try:
+        warning = warning or fill_espn_ids(out, sport, need, session=session, sleep=sleep)
+    except Exception as exc:  # noqa: BLE001
+        warning = warning or f"; WARNING: injury news unavailable ({type(exc).__name__})"
     fetched = failures = 0
     for i in range(n):
         eid = out["espn_id"].iat[i]
@@ -321,6 +397,12 @@ def add_news(pool, sport, dk_ids, *, session=None, sleep=time.sleep):
     wanted = {int(d) for d in dk_ids}
     tag = out["inj_tag"] if "inj_tag" in out.columns else pd.Series([""] * len(out), index=out.index)
     warning, fetched, failures = "", 0, 0
+    need = [i for i in range(len(out)) if int(out["dk_id"].iat[i]) in wanted and tag.iat[i] == ""
+            and not out["news_headline"].iat[i]]
+    try:
+        warning = fill_espn_ids(out, sport, need, session=session, sleep=sleep)
+    except Exception as exc:  # noqa: BLE001
+        warning = f"; WARNING: injury news unavailable ({type(exc).__name__})"
     for i in range(len(out)):
         eid = out["espn_id"].iat[i]
         if not eid or int(out["dk_id"].iat[i]) not in wanted or tag.iat[i] != "" or out["news_headline"].iat[i]:

@@ -175,8 +175,10 @@ class Resp:
 
 
 class FakeSession:
-    def __init__(self, sleeper=None, espn=None, sleeper_exc=None, espn_exc=None):
+    def __init__(self, sleeper=None, espn=None, sleeper_exc=None, espn_exc=None, teams=None, rosters=None,
+                 roster_exc=None):
         self.sleeper, self.espn = sleeper or {}, espn or {}
+        self.teams, self.rosters, self.roster_exc = teams, rosters or {}, roster_exc
         self.sleeper_exc, self.espn_exc = sleeper_exc, espn_exc
         self.calls = []
 
@@ -187,6 +189,13 @@ class FakeSession:
             if self.sleeper_exc:
                 raise self.sleeper_exc
             return Resp(self.sleeper)
+        if "site.api.espn.com" in url:
+            if self.roster_exc:
+                raise self.roster_exc
+            if url.endswith("/teams"):
+                return Resp(self.teams or {}, 200 if self.teams else 404)
+            tid = url.split("/teams/")[1].split("/")[0]
+            return Resp(self.rosters.get(tid, {}), 200 if tid in self.rosters else 404)
         if self.espn_exc:
             raise self.espn_exc
         eid = url.split("/athletes/")[1].split("/")[0]
@@ -349,3 +358,66 @@ def test_sit_mask_is_seeded():
     assert np.array_equal(a, b) and not np.array_equal(a, injuries.sit_mask(pp, 20_000, 6))
     assert not a[:, 0].any() and a[:, 2].all() and not a[:, 3].any()
     assert a[:, 1].mean() == pytest.approx(0.15, abs=0.01)
+
+
+def _teams(*pairs):
+    return {"sports": [{"leagues": [{"teams": [{"team": {"id": i, "abbreviation": a}} for i, a in pairs]}]}]}
+
+
+def _fallback_pool():
+    return pd.DataFrame({"dk_id": [1, 2, 3], "name": ["Dee Smith Jr.", "Rae Rice", "Other Guy"],
+                         "team": ["WAS", "KC", "DAL"], "status": ["Q", "Q", ""], "playable": [True] * 3})
+
+
+def _fallback_session(shape, **kw):
+    sl = _sleeper(("Dee Smith", "WSH", None), ("Rae Rice", "KC", None), ("Other Guy", "DAL", None))
+    if shape == "nfl":
+        rosters = {"28": {"athletes": [{"position": "offense", "items": [{"id": "555", "fullName": "Dee Smith"}]}]},
+                   "12": {"athletes": [{"items": [{"id": "666", "fullName": "Rae Rice"}]}]}}
+    else:
+        rosters = {"28": {"athletes": [{"id": "555", "fullName": "Dee Smith"}]},
+                   "12": {"athletes": [{"id": "666", "displayName": "Rae Rice"}]}}
+    return FakeSession(sleeper=sl, teams=_teams((28, "WSH"), (12, "KC"), (6, "DAL")), rosters=rosters,
+                       espn={"555": blurb("Dee Smith has been ruled out."), "666": blurb("Rae Rice will play.")}, **kw)
+
+
+@pytest.mark.parametrize("shape,sport", [("nfl", "nfl"), ("nba", "nba")])
+def test_espn_roster_fallback(shape, sport):
+    s = _fallback_session(shape)
+    pool, warn = injuries.add_injury_columns(_fallback_pool(), sport, now=NOW.replace(hour=21), session=s,
+                                             sleep=lambda _: None)
+    assert warn == ""
+    assert list(pool["espn_id"]) == ["555", "666", ""]
+    assert list(pool["lean"]) == ["out", "in", ""]
+    assert not pool["recommendable"].iat[0]
+    # only the teams with id-less tagged players were fetched; Other Guy (DAL, untagged) was not
+    rosters = [c for c in s.calls if "/roster" in c]
+    assert sorted(rosters) == sorted(c for c in rosters if "/teams/28/" in c or "/teams/12/" in c)
+    assert len(rosters) == 2 and sum(c.endswith("/teams") for c in s.calls) == 1
+
+
+def test_add_news_uses_roster_fallback():
+    s = _fallback_session("nfl")
+    pool, _ = injuries.add_injury_columns(_fallback_pool().assign(status=["", "", ""]), "nfl", now=NOW,
+                                          session=s, sleep=lambda _: None)
+    assert list(pool["espn_id"]) == ["", "", ""]
+    pool, warn = injuries.add_news(pool, "nfl", [1], session=s, sleep=lambda _: None)
+    assert warn == "" and pool["espn_id"].iat[0] == "555"
+    assert pool["news_headline"].iat[0].startswith("Dee Smith") and pool["news_headline"].iat[1] == ""
+
+
+def test_roster_failures_keep_tags():
+    for kw in ({"roster_exc": TimeoutError("slow")}, {"no_teams": True}):
+        s = _fallback_session("nfl", **({"roster_exc": kw["roster_exc"]} if "roster_exc" in kw else {}))
+        if "no_teams" in kw:
+            s.teams = None  # 404 on the teams list
+        pool, warn = injuries.add_injury_columns(_fallback_pool(), "nfl", now=NOW, session=s,
+                                                 sleep=lambda _: None)
+        assert warn.startswith("; WARNING: injury news unavailable")
+        assert list(pool["inj_tag"]) == ["Q", "Q", ""]
+        assert (pool["news_headline"] == "").all()
+        assert list(pool["recommendable"]) == [True, True, True]
+    s = _fallback_session("nfl")
+    s.rosters = {}
+    pool, warn = injuries.add_injury_columns(_fallback_pool(), "nfl", now=NOW, session=s, sleep=lambda _: None)
+    assert "WARNING" in warn and list(pool["inj_tag"]) == ["Q", "Q", ""]
