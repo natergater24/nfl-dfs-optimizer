@@ -62,8 +62,16 @@ def _allocate_tds(rng, team_tds, draw, rest, weights):
     return rng.multinomial(team_tds, p)[:, :-1]
 
 
+def _live(pool: pd.DataFrame) -> pd.Series:
+    """DraftKings-playable and, on injury-aware pools, recommendable (lean-out is treated like Doubtful)."""
+    live = pool.playable.astype(bool)
+    if "recommendable" in pool.columns:
+        live = live & pool.recommendable.astype(bool)
+    return live
+
+
 def starting_qbs(pool: pd.DataFrame) -> dict:
-    qbs = pool[(pool.position == "QB") & pool.playable]
+    qbs = pool[(pool.position == "QB") & _live(pool)]      # a lean-out QB1 hands the start to QB2
     return {team: int(g.salary.idxmax()) for team, g in qbs.groupby("team")}
 
 
@@ -84,6 +92,7 @@ def simulate(pool: pd.DataFrame, team_exp: pd.DataFrame, n_sims: int, seed: int,
     teams = {t: _simulate_team(rng, team_exp.loc[t], game_f[team_game[t]], n) for t in sorted(team_game)}
     qbs = starting_qbs(pool)
     out = np.zeros((n, len(pool)), dtype=np.float32)
+    live_all = _live(pool)
 
     for team, rows in pool.groupby("team").groups.items():
         o = pool.loc[rows]
@@ -92,7 +101,7 @@ def simulate(pool: pd.DataFrame, team_exp: pd.DataFrame, n_sims: int, seed: int,
             continue
         oidx = o.index.to_numpy()
         pos = o.position.to_numpy()
-        live = o.playable.to_numpy()
+        live = live_all.loc[o.index].to_numpy()
         s = teams[team]
         st = {k: np.zeros((n, len(o))) for k in _STATS}
 
@@ -139,7 +148,7 @@ def simulate(pool: pd.DataFrame, team_exp: pd.DataFrame, n_sims: int, seed: int,
                          fumble_recoveries=rng.poisson(FUMBLE_RECOVERIES_PER_GAME, n),
                          def_tds=rng.binomial(1, DEF_TD_RATE, n), safeties=rng.binomial(1, SAFETY_RATE, n),
                          blocked_kicks=rng.binomial(1, BLOCKED_KICK_RATE, n))
-        out[:, i] = pts if pool.at[i, "playable"] else 0.0
+        out[:, i] = pts if live_all.iat[i] else 0.0
     return apply_play_prob(out, pool, seed) if sit else out
 
 

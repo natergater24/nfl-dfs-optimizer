@@ -235,6 +235,10 @@ def step_build(today, args) -> str:
                                                           session=session, sleep=_news_sleep)
     except Exception as exc:  # noqa: BLE001
         inj_warn = _injury_warning(exc)
+        try:   # still apply DraftKings tags: exclusions, the questionable discount and sitting
+            pool_base = injuries.classify(pool_base)
+        except Exception:  # noqa: BLE001
+            pass
     res = build.build_slate(
         pool_base, pd.read_parquet(P / "player_weeks.parquet"),
         pd.read_parquet(P / "team_weeks.parquet"), json.loads((P / "team_model.json").read_text()),

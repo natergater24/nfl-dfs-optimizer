@@ -188,3 +188,16 @@ def test_recently_out_player_share_is_still_redistributed():
     out = shares.redistribute(pool).set_index("name")
     assert out.loc["JustOut", "carry_share"] == 0.0
     assert out.loc["Active", "carry_share"] == pytest.approx(0.7)
+
+
+def test_redistribute_treats_lean_out_like_doubtful():
+    rows = [{"name": "A", "tgt_share": 0.3, "carry_share": 0.0},
+            {"name": "B", "tgt_share": 0.2, "carry_share": 0.0},
+            {"name": "C", "tgt_share": 0.1, "carry_share": 0.0}]
+    plain = shares.redistribute(_pool(rows)).set_index("name")
+    assert plain.loc["A", "tgt_share"] == pytest.approx(0.3)            # no injury columns: unchanged
+    pool = _pool(rows)
+    pool["recommendable"] = [False, True, True]                         # A: Q, news "ruled out"
+    out = shares.redistribute(pool).set_index("name")
+    assert out.loc["A", "tgt_share"] == 0.0
+    assert out.loc["B", "tgt_share"] == pytest.approx(0.4) and out.loc["C", "tgt_share"] == pytest.approx(0.2)

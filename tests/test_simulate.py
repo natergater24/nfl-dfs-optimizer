@@ -106,3 +106,14 @@ def test_play_prob_zero_and_one(pool, team_exp):
     a = simulate.simulate(p, team_exp, 500, seed=1)
     raw = simulate.simulate(pool, team_exp, 500, seed=1)
     assert (a[:, j] == 0).all() and np.array_equal(a[:, k], raw[:, k])
+
+
+def test_lean_out_qb1_hands_start_to_qb2(pool, team_exp):
+    q1, q2 = _col(pool, "AAA", "QB1"), _col(pool, "AAA", "QB2")
+    assert simulate.starting_qbs(pool)["AAA"] == q1                      # no injury columns: unchanged
+    p = pool.copy()
+    p["recommendable"] = True
+    p.loc[q1, "recommendable"] = False
+    assert simulate.starting_qbs(p)["AAA"] == q2
+    sims = simulate.simulate(p, team_exp, 2000, seed=3)
+    assert sims[:, q2].mean() > 10 and sims[:, q1].max() == 0

@@ -103,11 +103,23 @@ def _shortlist(cand: np.ndarray, obj: np.ndarray, sal: np.ndarray, k: int) -> np
     return np.unique(np.concatenate([best, cheap]))
 
 
+def _slot_of(pos, dk, rows) -> dict | None:
+    """{dk_id: slot} when rows are already in ROSTER_SLOTS order (as published), else None."""
+    if len(rows) != len(ROSTER_SLOTS):
+        return None
+    for r, slot in zip(rows, ROSTER_SLOTS):
+        if not (pos[r] == slot or (slot == "FLEX" and pos[r] in FLEX_POSITIONS)):
+            return None
+    return {int(dk[r]): slot for r, slot in zip(rows, ROSTER_SLOTS)}
+
+
 def injury_backups(pool: pd.DataFrame, sims: np.ndarray, field_scores, lineup_rows, contest: dict,
                    per_slot: int = 10) -> pd.DataFrame:
     """One row per tagged (non-healthy) player in the lineup: the best healthy 1:1 replacement for his slot
     under the cap; else the best two-player rework (him + one other spot); else NO_BACKUP.
 
+    lineup_rows should be in ROSTER_SLOTS order (as the published lineup), so the FLEX player is the one
+    shown; rows in any other order are slotted with dk_rules.assign_slots.
     Slot rule: the same position, or any RB/WR/TE when he sits in FLEX. Replacements are healthy (no tag or
     P), DraftKings-playable and not already in the lineup. Scored with the contest metric against the field."""
     rows = [int(r) for r in lineup_rows]
@@ -120,7 +132,7 @@ def injury_backups(pool: pd.DataFrame, sims: np.ndarray, field_scores, lineup_ro
     in_lineup = np.zeros(len(p), dtype=bool)
     in_lineup[rows] = True
     free = (cls == "healthy") & recommendable(p) & ~in_lineup
-    slot_of = dict(zip(assign_slots(p.iloc[rows]), ROSTER_SLOTS))
+    slot_of = _slot_of(pos, dk, rows) or dict(zip(assign_slots(p.iloc[rows]), ROSTER_SLOTS))
     obj = objective_values(p, contest["weights"])
     total = int(sal[rows].sum())
     base = sims[:, rows].sum(axis=1)

@@ -273,3 +273,17 @@ def test_backups_without_injury_columns_use_status(projected):
     q = p.copy()
     q.loc[q["name"] == "AAA TE3", "status"] = "Q"
     assert len(lineups.injury_backups(q, sims, fs, _manual_lineup(q), config.CONTEST_TYPES["tournament"])) == 1
+
+
+def test_backup_uses_the_given_slot_order(projected):
+    p, sims = projected
+    # published order puts AAA WR1 in FLEX (assign_slots would pick DDD WR6)
+    names = ["AAA QB1", "AAA RB1", "BBB RB2", "DDD WR6", "BBB WR2", "CCC WR5", "AAA TE3", "AAA WR1", "DDD DST1"]
+    rows = [_row(p, n) for n in names]
+    in_lu = set(names)
+    other_wrs = [n for n in p.loc[p.position == "WR", "name"] if n not in in_lu]
+    t = _tagged(p, {"AAA WR1": "Q", **{n: "OUT" for n in other_wrs}})
+    fs = _field_scores(t, sims)
+    bk = lineups.injury_backups(t, sims, fs, rows, config.CONTEST_TYPES["tournament"])
+    assert bk.kind.iloc[0] == "1:1"
+    assert t.set_index("dk_id").loc[int(bk.in_dk_ids.iloc[0][0]), "position"] in ("RB", "TE")

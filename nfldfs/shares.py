@@ -101,19 +101,30 @@ def attach_shares(pool: pd.DataFrame, shares: pd.DataFrame) -> pd.DataFrame:
                      axis=1)
 
 
+def _live(pool: pd.DataFrame) -> pd.Series:
+    """Who plays: DraftKings-playable, and (on injury-aware pools) recommendable - a questionable player
+    whose news leans out is treated like Doubtful, so his targets and carries go to teammates."""
+    live = pool["playable"].astype(bool)
+    if "recommendable" in pool.columns:
+        live = live & pool["recommendable"].astype(bool)
+    return live
+
+
 def redistribute(pool: pd.DataFrame) -> pd.DataFrame:
     pool = pool.copy()
+    live_all = _live(pool)
     for _, idx in pool.groupby("team").groups.items():
         sub = pool.loc[idx]
+        live = live_all.loc[idx]
         for col in ("tgt_share", "carry_share"):
             for pos in ("QB", "RB", "WR", "TE"):
                 m_pos = sub.position == pos
-                out = m_pos & ~sub.playable
+                out = m_pos & ~live
                 movable = out
                 if "team_games_since" in sub.columns:
                     movable = out & (sub.team_games_since <= RECENT_ABSENCE_GAMES)
                 lost = float(sub.loc[movable, col].sum())
-                recv = m_pos & sub.playable
+                recv = m_pos & live
                 if lost > 0 and recv.any():
                     base = sub.loc[recv, col]
                     w = base / base.sum() if base.sum() > 0 else pd.Series(1.0 / len(base), index=base.index)
@@ -122,7 +133,7 @@ def redistribute(pool: pd.DataFrame) -> pd.DataFrame:
             total = float(pool.loc[idx, col].sum())
             if total > MAX_TEAM_SHARE and "games" in pool.columns:
                 excess = total - MAX_TEAM_SHARE
-                low = (pool.loc[idx, "playable"] & (pool.loc[idx, "games"] < LOW_EVIDENCE_GAMES)).to_numpy()
+                low = (live & (pool.loc[idx, "games"] < LOW_EVIDENCE_GAMES)).to_numpy()
                 low_idx = pd.Index(idx)[low]
                 low_sum = float(pool.loc[low_idx, col].sum())
                 if low_sum > 0:

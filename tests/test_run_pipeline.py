@@ -870,12 +870,26 @@ def _real_build_inputs(tmp_path, monkeypatch, statuses):
     return pool_base
 
 
+def _rank0_favourite():
+    """The player in the most rank-0 lineups of an untagged build (CCC WR1 out), to tag Q."""
+    from nfldfs import build
+    from tests.conftest import SYNTH_MODEL, synthetic_inputs
+    pool_base, pw, tw, games = synthetic_inputs()
+    pool_base.loc[pool_base["name"] == "CCC WR1", "playable"] = False
+    res = build.build_slate(pool_base, pw, tw, SYNTH_MODEL, games, n_sims=300, seed=config.SEED,
+                            n_candidates=3, field_size=150)
+    rec = res["lineups"][res["lineups"]["rank"] == 0]
+    return rec["name"].value_counts().index[0]
+
+
 def test_nfl_build_publishes_injury_files(tmp_path, monkeypatch):
-    base = _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q", "DDD WR1": "Q", "AAA TE1": "P"})
+    fav = _rank0_favourite()
+    assert fav != "CCC WR1"
+    base = _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q", fav: "Q", "AAA TE1": "P"})
     sleeper = {n: (t, f"E{d}") for n, t, d in zip(base["name"], base["team"], base["dk_id"])}
     news = {f"E{d}": "He practiced fully on Wednesday." for d in base["dk_id"]}
     cw = int(base.loc[base["name"] == "CCC WR1", "dk_id"].iloc[0])
-    dw = int(base.loc[base["name"] == "DDD WR1", "dk_id"].iloc[0])
+    dw = int(base.loc[base["name"] == fav, "dk_id"].iloc[0])
     news[f"E{cw}"] = "Smith has been ruled out for Sunday's game."
     news[f"E{dw}"] = "Jones was limited at practice Wednesday."
     sess = FakeInjurySession(sleeper, news)
@@ -900,7 +914,11 @@ def test_nfl_build_publishes_injury_files(tmp_path, monkeypatch):
     assert list(bk.columns) == ["contest_key", *run_pipeline.build.lineups.BACKUP_COLUMNS]
     rec = lus[lus["rank"] == 0]
     tagged = rec.merge(pool[["inj_class"]], left_on="dk_id", right_index=True)
+    assert len(bk) > 0 and dw in set(rec.dk_id)                          # not vacuous
     assert len(bk) == int((tagged.inj_class != "healthy").sum())
+    assert set(bk.contest_key) == set(tagged.loc[tagged.inj_class != "healthy", "contest_key"])
+    assert set(bk.tagged_dk_id) == {dw}
+    assert {int(i) for ids in bk.in_dk_ids for i in ids} <= set(pool.index[pool.inj_class == "healthy"])
 
 
 def test_nfl_build_survives_news_failure(tmp_path, monkeypatch):
@@ -921,4 +939,6 @@ def test_nfl_build_survives_injury_code_crash(tmp_path, monkeypatch):
     monkeypatch.setattr(run_pipeline.injuries, "add_news", _boom)
     msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
     assert "; WARNING: injury news unavailable (RuntimeError)" in msg
-    assert (tmp_path / "published" / "player_pool.parquet").exists()
+    pool = pd.read_parquet(tmp_path / "published" / "player_pool.parquet").set_index("name")
+    # DraftKings tags still applied (classify fallback): discount + sitting match the backups
+    assert pool.loc["CCC WR1", "inj_tag"] == "Q" and pool.loc["CCC WR1", "play_prob"] == config.Q_PLAY_PROB

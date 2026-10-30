@@ -49,44 +49,63 @@ def test_build_slate_adds_matchup_columns():
     assert (offense.mu_label == "Neutral").all()    # no schedule_rows given → neutral (DST rating is Vegas-based)
 
 
-def _injured_base():
-    from nfldfs import injuries
+def _plain_base():
+    """No injury columns; CCC WR1 (Q, blurb "ruled out") shown as unplayable, AAA RB1 Doubtful."""
     pool_base, pw, tw, games = _inputs()
-    pool_base["lean"] = ""
-    m = pool_base["name"] == "CCC WR1"
-    pool_base.loc[m, ["status", "lean"]] = ["Q", "out"]              # blurb: "ruled out"
-    pool_base.loc[pool_base["name"] == "DDD WR1", "status"] = "Q"     # unclear
+    pool_base.loc[pool_base["name"] == "CCC WR1", "playable"] = False
     pool_base.loc[pool_base["name"] == "AAA RB1", ["status", "playable"]] = ["D", False]
-    return injuries.classify(pool_base), pw, tw, games
+    return pool_base, pw, tw, games
 
 
-def test_build_slate_carries_injury_columns_and_backups(tmp_path):
-    base, pw, tw, games = _injured_base()
-    res = build.build_slate(base, pw, tw, MODEL, games, n_sims=300, seed=1, n_candidates=3, field_size=150)
+def _build(base, pw, tw, games):
+    return build.build_slate(base, pw, tw, MODEL, games, n_sims=300, seed=1, n_candidates=3, field_size=150)
+
+
+@pytest.fixture(scope="module")
+def injured_build():
+    """The untagged build's most-used rank-0 player turns Q (unclear news); CCC WR1 is Q with "ruled out"."""
+    from nfldfs import injuries
+    base, pw, tw, games = _plain_base()
+    plain = _build(base, pw, tw, games)
+    rec = plain["lineups"][plain["lineups"]["rank"] == 0]
+    fav = rec["name"].value_counts().index[0]
+    tagged = base.copy()
+    tagged["lean"] = ""
+    tagged.loc[tagged["name"] == "CCC WR1", ["status", "lean", "playable"]] = ["Q", "out", True]
+    tagged.loc[tagged["name"] == fav, "status"] = "Q"
+    return fav, plain, _build(injuries.classify(tagged), pw, tw, games)
+
+
+def test_build_slate_carries_injury_columns_and_backups(tmp_path, injured_build):
+    import pandas as pd
+    fav, plain, res = injured_build
     p = res["pool"]
     assert {"inj_tag", "inj_class", "lean", "recommendable", "play_prob"} <= set(p.columns)
-    assert p.set_index("name").loc["DDD WR1", "play_prob"] == config.Q_PLAY_PROB
+    assert p.set_index("name").loc[fav, "play_prob"] == config.Q_PLAY_PROB
     assert not {"CCC WR1", "AAA RB1"} & set(res["lineups"]["name"])
     bk = res["injury_backups"]
+    assert len(bk) > 0
     assert list(bk.columns) == ["contest_key"] + build.lineups.BACKUP_COLUMNS
-    # displayed projections stay the when-he-plays numbers
-    inj_cols = ["lean", "inj_tag", "inj_class", "recommendable", "play_prob"]
-    plain = build.build_slate(base.drop(columns=inj_cols), pw, tw, MODEL, games, n_sims=300, seed=1,
-                              n_candidates=3, field_size=150)["pool"].set_index("name")
-    assert p.set_index("name").loc["DDD WR1", "median"] == pytest.approx(plain.loc["DDD WR1", "median"])
-    q = p.index[p["name"] == "DDD WR1"][0]
-    assert (res["sims"][:, q] == 0).mean() > 0.05
+    # displayed projections stay the when-he-plays numbers (lean-out is projected like Doubtful)
+    by, pl = p.set_index("name"), plain["pool"].set_index("name")
+    assert by.loc[fav, "median"] == pytest.approx(pl.loc[fav, "median"])
+    assert by.loc["CCC WR1", "median"] == 0 and by.loc["CCC WR1", "tgt_share"] == 0
+    q = p.index[p["name"] == fav][0]
+    assert 0.05 < (res["sims"][:, q] == 0).mean() < 0.3
     build.write_published(res, tmp_path, {"x": 1})
-    import pandas as pd
-    assert list(pd.read_parquet(tmp_path / "injury_backups.parquet").columns) == list(bk.columns)
+    pub = pd.read_parquet(tmp_path / "injury_backups.parquet")
+    assert list(pub.columns) == list(bk.columns) and len(pub) == len(bk) and pub.contest_key.notna().all()
     assert "inj_tag" in pd.read_parquet(tmp_path / "player_pool.parquet").columns
 
 
-def test_build_slate_backups_cover_rank0_lineups_with_tagged_players():
-    base, pw, tw, games = _injured_base()
-    base.loc[base["name"] == "DDD WR1", "play_prob"] = config.Q_PLAY_PROB
-    res = build.build_slate(base, pw, tw, MODEL, games, n_sims=300, seed=1, n_candidates=3, field_size=150)
+def test_build_slate_backups_cover_rank0_lineups_with_tagged_players(injured_build):
+    fav, _, res = injured_build
     lus, bk = res["lineups"], res["injury_backups"]
-    q = int(res["pool"].set_index("name").loc["DDD WR1", "dk_id"])
+    q = int(res["pool"].set_index("name").loc[fav, "dk_id"])
     keys_with_q = set(lus[(lus["rank"] == 0) & (lus.dk_id == q)].contest_key)
+    assert keys_with_q                                                  # the test is not vacuous
     assert set(bk.loc[bk.tagged_dk_id == q, "contest_key"]) == keys_with_q
+    assert len(bk) == len(keys_with_q) and set(bk.kind) <= {"1:1", "two-player", "none"}
+    ids_in = {int(i) for ids in bk.in_dk_ids for i in ids}
+    healthy = set(res["pool"].loc[res["pool"].inj_class == "healthy", "dk_id"].astype(int))
+    assert ids_in <= healthy
