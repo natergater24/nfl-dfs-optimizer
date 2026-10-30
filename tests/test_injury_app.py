@@ -230,3 +230,83 @@ def test_pages_load_without_injury_data(make_app, published_dir, tmp_path):
     assert "Hover a name" not in _md(at)
     recs = view_builder.builder_records(d.pool, {"median": 1.0})
     assert all(r["inj"] == "" for r in recs)
+
+
+# ── fix round 1 ──────────────────────────────────────────────────────────────────────────────────────────
+
+def _copy_with(src, tmp_path, name, edit):
+    pub = tmp_path / name
+    shutil.copytree(src, pub)
+    pool = edit(pd.read_parquet(pub / "player_pool.parquet"))
+    pool = injuries.classify(pool)
+    pool.to_parquet(pub / "player_pool.parquet")
+    lus = pd.read_parquet(pub / "lineups.parquet")
+    sims = np.load(pub / "sims.npy").astype(np.float32)
+    build.rank0_backups(pool, sims, np.load(pub / "field.npy").astype(np.int64), lus) \
+        .to_parquet(pub / "injury_backups.parquet")
+    return pub, lus
+
+
+def test_probable_player_uses_published_backups(make_app, injured_pub, tmp_path, monkeypatch):
+    """P is healthy: the engine publishes no backup for him, so the app must not recompute on the device or say
+    "No backup computed"; P alone does not open the expander, but his news still shows."""
+    src, ids = injured_pub
+    rec = pd.read_parquet(src / "lineups.parquet").query("contest_key == 'single_entry' and rank == 0")
+    p_id = int(rec[rec.dk_id != ids["q"]].dk_id.iloc[0])
+
+    def tag_p(pool):
+        pool.loc[pool.dk_id == p_id, ["status", "news_headline"]] = ["P", "Probable, expected to play"]
+        return pool
+    pub, _ = _copy_with(src, tmp_path, "withp", tag_p)
+    from nfldfs_app import view_recommended
+
+    def no_device(*a, **k):
+        raise AssertionError("published backups should cover the rank-0 lineup")
+    monkeypatch.setattr(view_recommended, "device_backups", no_device)
+    at = make_app(pub)
+    assert not at.exception
+    assert not any("No backup computed" in c.value for c in at.caption)
+    text = _md(at)
+    assert "Probable, expected to play" in text and f"_backup_{p_id}" not in " ".join(b.key or "" for b in at.button)
+    assert ui.tagged_ids(data.load(pub).pool, rec.dk_id) == [ids["q"]]
+
+    def only_p(pool):                                                         # Q player healthy again: only P
+        pool = tag_p(pool)
+        pool.loc[pool.dk_id == ids["q"], "status"] = ""
+        return pool
+    pub2, _ = _copy_with(src, tmp_path, "onlyp", only_p)
+    at = make_app(pub2)
+    watch = [e for e in at.expander if e.label == "🩹 Injury watch"]
+    assert watch and not watch[0].proto.expanded and "Probable, expected to play" in _md(at)
+
+
+HOSTILE = {"name": 'Ja<b>"X"</b> *Star*', "inj_tag": "Q", "lean": "", "body_part": "Knee_[x](y)",
+           "news_headline": '<script>alert(1)</script> paid $5 to win $10 *now* [x](http://e.vil)',
+           "news_story": "Line one\n\nLine `two` with \\ and $3 _under_", "news_published": ""}
+
+
+def test_feed_text_is_escaped():
+    blurb = ui.watch_blurb(pd.Series(HOSTILE))
+    hover = ui.hover_names_html(pd.DataFrame([HOSTILE]))
+    for out in (blurb, hover):
+        assert "<script>" not in out and "<b>" not in out and "&lt;script&gt;" in out
+        for raw in ("$5", "$10", "*now*", "[x](", "*Star*", "`two`", "_under_"):
+            assert raw not in out, raw
+        assert "&#36;5" in out and "&#42;now&#42;" in out and "&#91;x&#93;" in out
+    assert "\n" not in hover and "\n\n" not in blurb
+    line = ui.backup_line({"tagged_dk_id": 1, "kind": "1:1", "out_dk_ids": [1], "in_dk_ids": [2],
+                           "remaining_salary": 0, "metric_before": 0.1, "metric_after": 0.1, "message": ""},
+                          {1: "A*b*", 2: "C_d_"})
+    assert "*b*" not in line and "_d_" not in line
+
+
+def test_non_injury_unplayable_still_blocks_export(injured_pub):
+    pub, ids = injured_pub
+    d = data.load(pub)
+    rec = d.lineups[(d.lineups.contest_key == "single_entry") & (d.lineups["rank"] == 0)]
+    mine = rec.dk_id.astype(int).tolist()
+    pool = d.pool.copy()
+    other = next(i for i in mine if i != ids["q"])
+    pool.loc[pool.dk_id == other, "playable"] = False                          # unplayable, but not injured
+    st_ = view_builder.lineup_status(mine, pool)
+    assert not st_["valid"] and any("ruled out" in m for m in st_["messages"])

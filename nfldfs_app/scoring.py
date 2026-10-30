@@ -15,9 +15,11 @@ def device_backups(d, ids, contest_key: str, field_scores):
     """nfldfs.lineups.injury_backups for any lineup (dk_ids in ROSTER_SLOTS order), computed on this device."""
     import pandas as pd
 
+    from nfldfs.dk_rules import ROSTER_SLOTS
     from nfldfs.lineups import BACKUP_COLUMNS, injury_backups
     picked = [int(i) for i in ids if i is not None]
-    if len(picked) != 9 or len(set(picked)) != 9 or any(i not in d.row_of for i in picked):
+    n = len(ROSTER_SLOTS)
+    if len(picked) != n or len(set(picked)) != n or any(i not in d.row_of for i in picked):
         return pd.DataFrame(columns=BACKUP_COLUMNS)
     from nfldfs_app.ui import remembered
     stamp = ("nfl", str(d.meta.get("built_at_utc") or d.meta.get("built_at")), len(d.pool), contest_key, tuple(picked))

@@ -295,16 +295,15 @@ def names_with_chips(df: pd.DataFrame) -> list[str]:
 def hover_names_html(df: pd.DataFrame, now: dt.datetime | None = None) -> str:
     """Recommended lineups: every player's name with an HTML title tooltip holding his latest news
     (st.dataframe does not render pandas Styler tooltips). "" for builds without injury data."""
-    import html
     if not has_injury_data(df):
         return ""
     parts = []
     for _, r in df.iterrows():
         tip = news_tooltip(r, now)
         chip = injury_chip(r.get("inj_tag", ""), r.get("lean", ""))
-        name = html.escape(str(r["name"]))
+        name = safe(r["name"])
         if tip:
-            tip = html.escape(tip, quote=True).replace("\r", "").replace("\n", "&#10;")   # one markdown line
+            tip = safe(tip).replace("\r", "").replace("\n", "&#10;")   # one markdown line
             name = (f"<span title=\"{tip}\" style='cursor:help;"
                     f"text-decoration:underline dotted'>{name}</span>")
         parts.append(name + (f" {chip}" if chip else ""))
@@ -317,7 +316,7 @@ def injury_warnings(pool: pd.DataFrame, ids) -> list[str]:
     leaning out. Same wording as nbadfs.lineups.out_lock_warnings. Empty for builds without injury data."""
     if not has_injury_data(pool):
         return []
-    by = pool.drop_duplicates("dk_id").set_index(pool.drop_duplicates("dk_id")["dk_id"].astype("int64"))
+    by = _by_id(pool)
     out = []
     for i in ids:
         if i is None or int(i) not in by.index:
@@ -329,6 +328,14 @@ def injury_warnings(pool: pd.DataFrame, ids) -> list[str]:
         elif tag in ("Q", "GTD") and _s(r.get("lean", "")).lower() == "out":
             out.append(f"⚠ {r['name']}: news leans out")
     return out
+
+
+def blocks_export(row) -> bool:
+    """My Lineup: an unplayable player blocks the export ("ruled out — swap him") unless his injury tag is the
+    reason — then Nathan's pick wins (⚠ + backup). Builds without injury data: every unplayable player blocks."""
+    if bool(row["playable"]):
+        return False
+    return _s(row.get("inj_class", "")) != "excluded"
 
 
 def pick_warnings(pool: pd.DataFrame, ids) -> list[str]:
@@ -345,11 +352,11 @@ def _ids(v) -> list[int]:
 def backup_line(b, name_of: dict) -> str:
     """"If X sits: Y — $1,200 left, 31% → 29%" (markdown, $ escaped) for one injury_backups row."""
     outs, ins = _ids(b["out_dk_ids"]), _ids(b["in_dk_ids"])
-    who = name_of.get(int(b["tagged_dk_id"]), "He")
+    who = safe(name_of.get(int(b["tagged_dk_id"]), "He"))
     if b["kind"] == "none" or not ins:
         return f"If **{who}** sits: {b['message']}"
-    names = ", ".join(f"**{name_of.get(i, i)}**" for i in ins)
-    extra = [name_of.get(o, o) for o in outs if o != int(b["tagged_dk_id"])]
+    names = ", ".join(f"**{safe(name_of.get(i, i))}**" for i in ins)
+    extra = [safe(name_of.get(o, o)) for o in outs if o != int(b["tagged_dk_id"])]
     also = f" (also moves out {', '.join(map(str, extra))})" if extra else ""
     return (f"If **{who}** sits: {names}{also} — \\${int(b['remaining_salary']):,} left, "
             f"{float(b['metric_before']):.0%} → {float(b['metric_after']):.0%}")
@@ -389,47 +396,77 @@ def remembered(cache_key: tuple, compute):
     return memo[cache_key]
 
 
-def tagged_ids(pool: pd.DataFrame, ids) -> list[int]:
+def _by_id(pool: pd.DataFrame) -> pd.DataFrame:
+    u = pool.drop_duplicates("dk_id")
+    return u.set_index(u["dk_id"].astype("int64"))
+
+
+def tagged_ids(pool: pd.DataFrame, ids, include_healthy: bool = False) -> list[int]:
+    """Lineup players who need a backup: inj_class not healthy (P is healthy). With include_healthy, every
+    player with any tag (P too) — for showing news."""
     if not has_injury_data(pool):
         return []
-    by = pool.drop_duplicates("dk_id").set_index(pool.drop_duplicates("dk_id")["dk_id"].astype("int64"))
-    return [int(i) for i in ids if i is not None and int(i) in by.index and _s(by.at[int(i), "inj_tag"])]
+    by = _by_id(pool)
+
+    def hit(i):
+        if include_healthy:
+            return bool(_s(by.at[i, "inj_tag"]))
+        cls = _s(by.at[i, "inj_class"]) if "inj_class" in by.columns else ""
+        return bool(_s(by.at[i, "inj_tag"])) and cls != "healthy"
+    return [int(i) for i in ids if i is not None and int(i) in by.index and hit(int(i))]
+
+
+_MD_SPECIAL = {"\\": "&#92;", "`": "&#96;", "*": "&#42;", "_": "&#95;", "[": "&#91;", "]": "&#93;",
+               "$": "&#36;", "~": "&#126;", "#": "&#35;", "|": "&#124;"}
+
+
+def safe(text) -> str:
+    """Feed/name text for st.markdown(unsafe_allow_html=True) or an HTML attribute: HTML-escaped, and Markdown
+    specials (\\ ` * _ [ ] $ ~ # |) turned into character references, so "$5 … $10" is no LaTeX and *x* or
+    [x](y) stay literal."""
+    import html
+    return "".join(_MD_SPECIAL.get(ch) or html.escape(ch, quote=True) for ch in _s(text))
+
+
+def watch_blurb(r, now: dt.datetime | None = None) -> str:
+    """One Injury watch entry: name, chip, body part, headline + age, and the story in a <details> block."""
+    bits = [f"**{safe(r['name'])}** {injury_chip(r.get('inj_tag', ''), r.get('lean', ''))}"]
+    if _s(r.get("body_part", "")):
+        bits.append(safe(r["body_part"]))
+    head = _s(r.get("news_headline", ""))
+    if head:
+        age = news_age(r.get("news_published", ""), now)
+        bits.append(f"📰 {safe(head)}" + (f" <span style='opacity:.7'>({age})</span>" if age else ""))
+    else:
+        bits.append("<span style='opacity:.7'>no news yet</span>")
+    text = " · ".join(bits)
+    story = _s(r.get("news_story", ""))
+    if story:
+        text += (f"<details><summary style='cursor:pointer;font-size:13px'>Full story</summary>"
+                 f"<div style='font-size:13px'>{safe(story).replace(chr(10), ' ')}</div></details>")
+    return text
 
 
 def injury_watch(pool: pd.DataFrame, ids, backups, key_prefix: str, on_apply, now: dt.datetime | None = None) -> None:
     """🩹 Injury watch: per tagged player in the lineup — chip, body part, headline + age (story on expand) and
     the backup line with an Apply button. `on_apply(new_ids, slot)` runs when Apply is clicked. Nothing for
     builds without injury data."""
-    import html
-
     import streamlit as st
     if not has_injury_data(pool):
         return
-    tagged = tagged_ids(pool, ids)
-    by = pool.drop_duplicates("dk_id").set_index(pool.drop_duplicates("dk_id")["dk_id"].astype("int64"))
+    need = set(tagged_ids(pool, ids))                       # not healthy: these get a backup line
+    shown = tagged_ids(pool, ids, include_healthy=True)    # P players still show their news
+    by = _by_id(pool)
     name_of = {int(i): str(n) for i, n in zip(by.index, by["name"])}
-    with st.expander("🩹 Injury watch", expanded=bool(tagged)):
-        if not tagged:
+    with st.expander("🩹 Injury watch", expanded=bool(need)):
+        if not shown:
             st.caption("No injury tags in this lineup.")
             return
         bk = backups if backups is not None else pd.DataFrame()
-        for t in tagged:
-            r = by.loc[t]
-            bits = [f"**{html.escape(str(r['name']))}** {injury_chip(r.get('inj_tag', ''), r.get('lean', ''))}"]
-            if _s(r.get("body_part", "")):
-                bits.append(html.escape(_s(r["body_part"])))
-            head = _s(r.get("news_headline", ""))
-            if head:
-                age = news_age(r.get("news_published", ""), now)
-                bits.append(f"📰 {html.escape(head)}" + (f" <span style='opacity:.7'>({age})</span>" if age else ""))
-            else:
-                bits.append("<span style='opacity:.7'>no news yet</span>")
-            text = " · ".join(bits)
-            story = _s(r.get("news_story", ""))
-            if story:
-                text += (f"<details><summary style='cursor:pointer;font-size:13px'>Full story</summary>"
-                         f"<div style='font-size:13px'>{html.escape(story)}</div></details>")
-            st.markdown(text, unsafe_allow_html=True)
+        for t in shown:
+            st.markdown(watch_blurb(by.loc[t], now), unsafe_allow_html=True)
+            if t not in need:
+                continue
             rows = bk[bk["tagged_dk_id"].astype("int64") == t] if len(bk) else bk
             if not len(rows):
                 st.caption("No backup computed for this player.")

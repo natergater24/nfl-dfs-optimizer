@@ -63,10 +63,7 @@ def lineup_status(ids, pool: pd.DataFrame) -> dict:
     picked = [int(i) for i in ids if i is not None]
     gone = [i for i in picked if i not in by.index]
     known = [i for i in picked if i in by.index]
-    tagged = ui.has_injury_data(pool)
-    # Builds with injury tags: Nathan's own picks win whatever the tag (⚠ + a backup below). Older builds: an
-    # unplayable player still blocks the export.
-    out = [] if tagged else [by.at[i, "name"] for i in known if not bool(by.at[i, "playable"])]
+    out = [by.at[i, "name"] for i in known if ui.blocks_export(by.loc[i])]
     used = int(by.loc[known, "salary"].sum()) if known else 0
     dupes = len(set(picked)) != len(picked)
     messages = [f"⚠ {n} is now ruled out — swap him before lock." for n in out]

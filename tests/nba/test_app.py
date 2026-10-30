@@ -266,7 +266,7 @@ def nba_injured(nba_pub, tmp_path_factory):
         q = int(rec.dk_id.iloc[2])
         used = set(lus.dk_id.astype(int))
         d = int(pool[pool.playable & ~pool.dk_id.isin(used)].sort_values("salary").dk_id.iloc[-1])
-        published = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=25)).isoformat()
+        published = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=5, minutes=20)).isoformat()
         by = pool.dk_id.astype(int)
         pool.loc[by == q, ["status", "body_part", "news_headline", "news_story", "news_published"]] = [
             "Q", "Knee", NBA_HEADLINE, "Coach said he will test it in warmups.", published]
@@ -296,7 +296,7 @@ def test_nba_recommended_shows_injury_watch_and_apply(monkeypatch, nba_injured):
     watch = [e for e in at.expander if e.label == "🩹 Injury watch"]
     assert watch and watch[0].proto.expanded
     text = "\n".join(m.value for m in at.markdown)
-    assert NBA_HEADLINE in text and "25 min ago" in text and "Knee" in text and "#f2c94c" in text
+    assert NBA_HEADLINE in text and "5 h ago" in text and "Knee" in text and "#f2c94c" in text
     assert f"If **{q_name}** sits:" in text and "→" in text
     assert f'title="🟡 Q · Knee&#10;{NBA_HEADLINE}' in text                  # hover tooltip on the lineup names
     bk = sd.backups[(sd.backups.contest_key == "single_entry") & (sd.backups.tagged_dk_id == q)].iloc[0]

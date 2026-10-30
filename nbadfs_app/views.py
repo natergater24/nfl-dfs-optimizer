@@ -131,9 +131,7 @@ def lineup_status(ids, pool: pd.DataFrame) -> dict:
     picked = [int(i) for i in ids if i is not None]
     gone = [i for i in picked if i not in by.index]
     known = [i for i in picked if i in by.index]
-    # Builds with injury tags: Nathan's own picks win whatever the tag (⚠ + a backup in 🩹 Injury watch).
-    # Older builds: an unplayable player still blocks the export.
-    out = [] if ui.has_injury_data(pool) else [by.at[i, "name"] for i in known if not bool(by.at[i, "playable"])]
+    out = [by.at[i, "name"] for i in known if ui.blocks_export(by.loc[i])]
     used = int(by.loc[known, "salary"].sum()) if known else 0
     dupes = len(set(picked)) != len(picked)
     messages = [f"⚠ {n} is now ruled out — swap him before lock." for n in out]
@@ -404,7 +402,8 @@ def _recommended(sd: data.SlateData, key: str) -> None:
         c = st.columns([7, 1], vertical_alignment="center")
         oc = ui.injury_chip(o.get("inj_tag", ""), o.get("lean", ""))
         nc = ui.injury_chip(n.get("inj_tag", ""), n.get("lean", ""))
-        c[0].markdown(f"Swap **{o['name']}**{' ' + oc if oc else ''} → **{n['name']}**{' ' + nc if nc else ''} "
+        c[0].markdown(f"Swap **{ui.safe(o['name'])}**{' ' + oc if oc else ''} → **{ui.safe(n['name'])}**"
+                      f"{' ' + nc if nc else ''} "
                       f"({n.positions}, {n.team}, {ui.TIER_ICON[n.tier]} "
                       f"{n.own_pct:.1f}%) · {'+' if diff >= 0 else '−'}\\${abs(diff):,} · "
                       f"{arrow} {delta_text(s.delta)}", unsafe_allow_html=True)
