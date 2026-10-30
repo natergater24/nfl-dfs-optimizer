@@ -57,6 +57,14 @@ def test_tags_and_classes():
     ("He was expected to play, but is now ruled out.", "out"),
     ("He did not practice, then is ruled out.", "out"),
     ("Nothing relevant here.", "unclear"),
+    ("He is ruled out for Sunday, but is expected to play next week.", "out"),
+    ("He is out Sunday against the Bills.", "out"),
+    ("He is doubtful for Sunday.", "out"),
+    ("He was held out of practice Wednesday.", "unclear"),
+    ("He is out of practice Wednesday.", "unclear"),
+    ("He is expected to play Sunday after missing practice.", "in"),
+    ("He will return next week.", "unclear"),
+    ("He is expected to play in Week 9.", "unclear"),
 ])
 def test_lean_rules(text, expected):
     assert injuries.lean(text, RECENT, NOW) == expected

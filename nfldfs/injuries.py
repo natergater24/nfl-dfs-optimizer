@@ -50,7 +50,8 @@ def tag_class(tag) -> str:
 # ---------------------------------------------------------------- reading the news
 
 _OUT = ["ruled out", "will not play", "won't play", "not expected to play", "unlikely to play",
-        "will miss", "expected to miss", "out for", "listed as doubtful", "doubtful to play"]
+        "will miss", "expected to miss", "out for", "listed as doubtful", "doubtful to play",
+        "is out", "is doubtful", "doubtful for"]
 _IN = ["expected to play", "will play", "on track to play", "on track to return to action",
        "cleared to play", "upgraded", "removed from the injury report", "probable",
        "no injury designation"]
@@ -58,8 +59,13 @@ _IN = ["expected to play", "will play", "on track to play", "on track to return 
 # "rest day", "veteran rest", "maintenance") are deliberately not matched: they are neutral.
 
 _PHRASES = [(p, "out") for p in _OUT] + [(p, "in") for p in _IN]
-_PHRASE_RE = re.compile("|".join(r"(?P<p%d>%s)" % (i, re.escape(p).replace(r"\ ", r"\s+"))
+_RAW = {"is out": r"is\s+out(?!\s+of\s+practice)"}  # "out of practice" is practice-only
+_PHRASE_RE = re.compile("|".join(r"(?P<p%d>%s)" % (i, _RAW.get(p) or re.escape(p).replace(r"\ ", r"\s+"))
                                  for i, (p, _) in enumerate(_PHRASES)))
+# A game-in phrase that points at a later game ("expected to play next week") does not count.
+_FUTURE = re.compile(r"next\s+(week|game|sunday|monday|thursday|matchup)|later\s+this\s+season"
+                     r"|week\s+\d+(?!\s+(prep|practice|preparation))|after\s+the\s+bye|return\s+next")
+_CLAUSE_END = re.compile(r"[.;]|\bbut\b")
 _TOKEN = re.compile(r"[\w']+|[,.;:!?()\-]")
 _NEGATORS = {"not", "isn't", "aren't", "wasn't", "weren't", "never", "cannot"}
 _BREAKERS = {",", ".", ";", ":", "!", "?", "(", ")", "-", "but", "and", "however", "although", "while",
@@ -102,6 +108,11 @@ def lean(text, published, now) -> str | None:
     for m in _PHRASE_RE.finditer(s):
         idx = int(m.lastgroup[1:])
         kind = _PHRASES[idx][1]
+        if kind == "in":
+            rest = s[m.end():]
+            end = _CLAUSE_END.search(rest)
+            if _FUTURE.search(rest[:end.start()] if end else rest):
+                continue
         # phrases that carry their own negation ("will not play") are never flipped again
         if not re.search(r"\b(not|won't)\b", m.group(0)) and _negated(s[:m.start()]):
             kind = "in" if kind == "out" else "out"
