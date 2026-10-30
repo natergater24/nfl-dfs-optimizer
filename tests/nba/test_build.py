@@ -108,3 +108,14 @@ def test_old_style_call_still_builds_and_classifies():
     p = res["pool"].set_index("name")
     assert p.at["Mikal Bridges", "inj_tag"] == "Q" and p.at["Mikal Bridges", "play_prob"] == pytest.approx(0.85)
     assert (p["news_headline"] == "").all() and (p["lean"] == "").all()
+
+
+def test_build_slate_survives_backup_failure(monkeypatch, caplog):
+    def boom(*a, **k):
+        raise RuntimeError("backups broke")
+    monkeypatch.setattr(B, "rank0_backups", boom)
+    with caplog.at_level("ERROR", logger="nbadfs.build"):
+        res = B.build_slate(*_inputs(), n_sims=200, seed=7, field_size=100, n_candidates=2)
+    bk = res["injury_backups"]
+    assert len(bk) == 0 and list(bk.columns) == ["contest_key", *BACKUP_COLUMNS]
+    assert len(res["lineups"]) and "injury backups failed" in caplog.text

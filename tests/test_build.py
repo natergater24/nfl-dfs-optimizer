@@ -109,3 +109,16 @@ def test_build_slate_backups_cover_rank0_lineups_with_tagged_players(injured_bui
     ids_in = {int(i) for ids in bk.in_dk_ids for i in ids}
     healthy = set(res["pool"].loc[res["pool"].inj_class == "healthy", "dk_id"].astype(int))
     assert ids_in <= healthy
+
+
+def test_build_slate_survives_backup_failure(monkeypatch, caplog):
+    def boom(*a, **k):
+        raise RuntimeError("backups broke")
+    monkeypatch.setattr(build, "rank0_backups", boom)
+    pool_base, pw, tw, games = _inputs()
+    with caplog.at_level("ERROR", logger="nfldfs.build"):
+        res = build.build_slate(pool_base, pw, tw, MODEL, games, n_sims=200, seed=1, n_candidates=2,
+                                field_size=100)
+    bk = res["injury_backups"]
+    assert len(bk) == 0 and list(bk.columns) == ["contest_key", *build.lineups.BACKUP_COLUMNS]
+    assert len(res["lineups"]) and "injury backups failed" in caplog.text

@@ -4,12 +4,14 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from nfldfs.injuries import apply_play_prob, classify
+from nfldfs.lineups import BACKUP_COLUMNS
 from nfldfs.status import atomic_save_npy, atomic_write_parquet, atomic_write_text
 
 from .config import FIELD_SIZE, N_SIMS, SEED
@@ -19,6 +21,8 @@ from .ownership import add_ownership, sample_field
 from .project import project
 from .simulate import simulate, summarize
 from .stats import match_rates
+
+log = logging.getLogger("nbadfs.build")
 
 PUBLISHED_FILES = ["pool.parquet", "lineups.parquet", "swaps.parquet", "injury_backups.parquet", "field.npy",
                    "build_meta.json"]
@@ -62,7 +66,11 @@ def build_slate(salaries_text: str, lines: pd.DataFrame, rates_last: pd.DataFram
     del raw
     field = sample_field(pool, field_size, np.random.default_rng(seed)).astype(np.int32)
     lineups, swaps = build_all(pool, sims, field, n_candidates=n_candidates, seed=seed)
-    backups = rank0_backups(pool, sims, field, lineups)
+    try:    # backups must never fail a slate: without them the app computes them on the device
+        backups = rank0_backups(pool, sims, field, lineups)
+    except Exception:  # noqa: BLE001
+        log.exception("injury backups failed; the app will compute them on the device")
+        backups = pd.DataFrame(columns=["contest_key", *BACKUP_COLUMNS])
     meta = {"n_sims": int(n_sims), "seed": int(seed), "stats_match_rate": float(match_rate),
             "sims_fingerprint": sims_fingerprint(sims),
             "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}

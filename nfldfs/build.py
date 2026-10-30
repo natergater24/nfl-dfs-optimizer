@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,8 @@ from .dk_rules import write_upload_csv
 from .sim_eval import lineup_scores
 from .status import atomic_save_npy, atomic_write_parquet, atomic_write_text
 from .vegas import implied_totals
+
+log = logging.getLogger("nfldfs.build")
 
 
 def assemble_team_expectations(pool_base: pd.DataFrame, vegas_games: pd.DataFrame, team_model: dict):
@@ -49,9 +52,19 @@ def build_slate(pool_base, player_weeks, team_weeks, team_model, vegas_games, *,
     lus, swaps, field = lineups.build_all(pool, sims, n_candidates=n_candidates, field_size=field_size, seed=seed)
     offense = pool[(pool.position != "DST") & pool.playable]
     return {"pool": pool, "sims": sims, "lineups": lus, "swaps": swaps, "field": field,
-            "injury_backups": rank0_backups(pool, sims, field, lus),
+            "injury_backups": safe_rank0_backups(pool, sims, field, lus),
             "match_rate": float(offense.matched.mean()) if len(offense) else 1.0,
             "unmatched": sorted(offense.loc[~offense.matched, "name"].tolist())}
+
+
+def safe_rank0_backups(pool, sims, field, lus) -> pd.DataFrame:
+    """rank0_backups, but a failure only costs the published backups (logged): the app then computes them on
+    the device. Backups must never fail a build."""
+    try:
+        return rank0_backups(pool, sims, field, lus)
+    except Exception:  # noqa: BLE001
+        log.exception("injury backups failed; the app will compute them on the device")
+        return pd.DataFrame(columns=["contest_key", *lineups.BACKUP_COLUMNS])
 
 
 def rank0_backups(pool: pd.DataFrame, sims: np.ndarray, field, lus: pd.DataFrame, contest_types=None) -> pd.DataFrame:
