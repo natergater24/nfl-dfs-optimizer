@@ -104,6 +104,29 @@ Use the 🏈 / 🏀 pages in the left-hand menu to switch sports. The 🏀 NBA p
 - **Late news:** on the Mac, click **⟳ Refresh NBA now**.
 - NBA results tracking comes in a later phase.
 
+## 🩹 Injuries
+Works the same on the 🏈 NFL and 🏀 NBA pages.
+- **Chips next to a name:** yellow **Q** / **GTD** = questionable or game-time decision, orange **D** = doubtful,
+  red **OUT** / **IR**, gray **P** = probable. Beside it, **📰 leans in** means the latest news says he is expected
+  to play; **📰 leans out** means the news says he won't.
+- **How the app reads the news:** it only counts statements about the game itself ("expected to play",
+  "ruled out", "won't suit up"). Practice notes alone (a missed practice) never count as out, and "expected to
+  play" beats a missed practice. News about a future game, or a negated line, is not counted.
+- **What is never recommended:** Doubtful, Out and IR players, and questionable players whose news says they
+  won't play.
+- **Questionable players** count at 85% of their usual projection and sit out in 15% of the simulations, so
+  the app uses one only when he is clearly better value than the healthy options.
+- **🩹 Injury watch** (box on the page): each tagged player in the recommended lineup with the latest news, how
+  old it is, a **Full story** link, and a backup line, "If X sits: ...". Click **Apply** and the backup is
+  copied into your **🛠 My Lineup**.
+- **Hover a player name** under a recommended lineup to see the latest news. On the phone there is no hover, so
+  use the Injury watch box.
+- **Your own picks:** if you choose (or lock) an injured player, he stays in your lineup with a **⚠** and a
+  suggested backup. The app never removes him for you.
+- **Filter:** tick **Injured / questionable only** in the player pool to see just those players.
+- **When it updates:** on every scheduled build and every **Refresh** (Mac button or phone "Get latest").
+  News the app can't fetch just shows no news line; the tag from DraftKings still applies.
+
 ## If a scheduled run was missed
 - **Best setup on run mornings (Tue/Thu/Sun):** Mac plugged in, or at least with the lid open. Each run keeps the
   Mac awake while it works, even on battery, but a closed lid on battery forces sleep and the run crawls along in

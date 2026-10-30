@@ -181,3 +181,23 @@ DK Status "OUT" normalized to "O". Data sources: DK lobby ContestTypeId 70 (NBA 
 Builder component: eligibility now passed from Python (NFL unchanged).
 OUTSTANDING: phase 2 (grayed started games, refresh warning, late-swap clock marker) and phase 3 (NBA My Results).
 Calibration to watch: ownership looks chalk-heavy; minutes capped at 40 after Out redistribution.
+
+=== 2026-10-29: injury tags, news and backups (branch injury) ===
+Spec docs/superpowers/specs/2026-10-29-injury-news-design.md. Shared core nfldfs/injuries.py, used by both engines.
+Sources: DK Status; Sleeper players API (body part, updated time); ESPN athlete overview rotowire blurb (news text);
+ESPN team-roster fallback fills a missing espn_id.
+Rules: tag classes Q/GTD (yellow), D (orange), O/IR (red), P (gray). Recommendable: not D/O/IR, and not a Q whose news
+leans out. Q_PLAY_PROB 0.85 is used both in the sims (Q sits in 15%) and the objective (scaled projection). A lean-out
+Q is treated like Doubtful, incl. usage redistribution and the QB-start handling. Lean reading is game-level: only
+statements about this game; future-game and negation handling; practice-only notes never mean out; "expected to play"
+beats a missed practice; keyword matches use word boundaries. News older than NEWS_MAX_AGE_H is ignored.
+Published columns on the pool: injury tag/class, body_part, injury_updated, espn_id, news text/lean fields.
+injury_backups.parquet: one row per tagged player in a rank-0 lineup (backup + effect); NFL at data/published root,
+NBA per slate under data/published/nba/<draft_group_id>/.
+App: chips, news lean badge, 🩹 Injury watch box (news, age, Full story, "If X sits" with Apply into My Lineup), hover
+news line under recommended lineups (phone uses Injury watch), user-picked injured players keep ⚠ + backup,
+"Injured / questionable only" filter.
+Constants: Q_PLAY_PROB 0.85, NEWS_MAX_AGE_H 72 (config.py), NEWS_DELAY_S 0.2 (pause between ESPN requests),
+MAX_NEWS_FAILURES 3 (consecutive ESPN failures before giving up for the run; in injuries.py).
+Known limits: ESPN feed is unofficial and may change or fail; first live check had ~3 of 55 Q players without news.
+Step 2 (live NFL refresh + NBA stage, phone pages) and Step 3 (spot-checks vs DraftKings, keyword misses) still to do.

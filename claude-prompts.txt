@@ -62,3 +62,12 @@ Request (approved by Nathan in chat)
   with swaps, My Lineup, Tweak & Rebuild; automatic builds at 2:00 PM and 6:30 PM ET on NBA days.
 - Built on branch nba-phase1 from docs/superpowers/specs/2026-10-23-nba-optimizer-design.md; docs in USER_MANUAL,
   README, claude-context. Phase 2 (started-game handling) and phase 3 (NBA My Results) still to do.
+
+SESSION LOG - 2026-10-29 (injury tags and news)
+
+Request (approved by Nathan in chat)
+- Show injury tags and latest news on NFL and NBA; read the news for "leans in / leans out"; never recommend
+  Doubtful/Out/IR or lean-out questionable players; questionable players at 85%; Injury watch box with backups and
+  Apply into My Lineup; hover news; injured-only filter.
+- Built on branch injury from docs/superpowers/specs/2026-10-29-injury-news-design.md; docs in USER_MANUAL, README,
+  claude-context. Live check and merge still to do.

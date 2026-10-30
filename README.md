@@ -37,6 +37,10 @@ Recommended lineup with swaps, My Lineup builder and Tweak & Rebuild. It runs au
 6:30 PM ET on NBA days: `./py run_pipeline.py --stage nba`. Spec: `docs/superpowers/specs/2026-10-23-nba-optimizer-design.md`.
 NBA results tracking is a later phase.
 
+Injuries (NFL and NBA): DraftKings tags plus Sleeper/ESPN news, a game-level "leans in / leans out" reading,
+questionable players at 85% (with 15% sit-out sims), never-recommend rules, an Injury watch box with backups,
+and an injured-only filter. Spec: `docs/superpowers/specs/2026-10-29-injury-news-design.md`.
+
 ## How it works
 Spec: `docs/superpowers/specs/2026-10-11-nfl-dfs-optimizer-design.md`.
 Vegas implied totals → expected team volume → player shares → 10,000 correlated game
