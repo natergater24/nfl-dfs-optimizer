@@ -421,3 +421,32 @@ def test_roster_failures_keep_tags():
     s.rosters = {}
     pool, warn = injuries.add_injury_columns(_fallback_pool(), "nfl", now=NOW, session=s, sleep=lambda _: None)
     assert "WARNING" in warn and list(pool["inj_tag"]) == ["Q", "Q", ""]
+
+
+def test_roster_fallback_runs_when_sleeper_is_down():
+    # Sleeper fails, ESPN rosters + news work: the tagged players still get news and a lean
+    s = _fallback_session("nfl", sleeper_exc=ConnectionError("sleeper down"))
+    pool, warn = injuries.add_injury_columns(_fallback_pool(), "nfl", now=NOW.replace(hour=21), session=s,
+                                             sleep=lambda _: None)
+    assert warn == "; WARNING: injury news unavailable (ConnectionError)"
+    assert list(pool["espn_id"]) == ["555", "666", ""]
+    assert list(pool["lean"]) == ["out", "in", ""]
+    assert not pool["recommendable"].iat[0] and pool["play_prob"].iat[0] == 0
+    assert pool["recommendable"].iat[1]
+
+
+class _CachingSession(FakeSession):
+    """FakeSession that says every ESPN news URL is already cached (as the pipeline's run cache would)."""
+    def is_cached(self, url):
+        return "/athletes/" in url
+
+
+def test_no_pause_for_cached_requests():
+    naps = []
+    injuries.add_injury_columns(_pool(), "nfl", now=NOW.replace(hour=21), session=_CachingSession(
+        sleeper=_fake_sources().sleeper, espn=_fake_sources().espn), sleep=naps.append)
+    assert naps == []
+    naps = []
+    injuries.add_injury_columns(_pool(), "nfl", now=NOW.replace(hour=21), session=_fake_sources(),
+                                sleep=naps.append)
+    assert len(naps) == 3

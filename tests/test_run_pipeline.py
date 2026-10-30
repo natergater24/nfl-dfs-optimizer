@@ -944,6 +944,76 @@ def test_nfl_build_survives_injury_code_crash(tmp_path, monkeypatch):
     assert pool.loc["CCC WR1", "inj_tag"] == "Q" and pool.loc["CCC WR1", "play_prob"] == config.Q_PLAY_PROB
 
 
+def test_run_cache_time_budget_short_circuits(monkeypatch):
+    monkeypatch.setattr(config, "INJURY_TIME_BUDGET_S", 120)
+    t = [0.0]
+
+    class Slow(FakeInjurySession):
+        def get(self, url, timeout=None):
+            t[0] += 50                                      # every real request takes 50 s
+            return super().get(url, timeout)
+
+    sess = Slow({}, {"E1": "a", "E2": "b", "E3": "c", "E4": "d"})
+    cache = run_pipeline._RunCache(sess, clock=lambda: t[0])
+    url = run_pipeline.injuries.news_url
+    for i in (1, 2, 3):
+        cache.get(url(f"E{i}", "nfl"))
+    with pytest.raises(TimeoutError):                       # 150 s spent >= 120 s: no more requests
+        cache.get(url("E4", "nfl"))
+    assert len(sess.urls) == 3 and cache.failures == 1
+    assert cache.get(url("E1", "nfl")).status_code == 200  # cached answers still served
+
+
+def test_run_cache_hits_do_not_pause():
+    pool = pd.DataFrame({"dk_id": [1, 2, 3], "name": ["A A", "B B", "C C"], "team": ["AAA"] * 3,
+                         "status": ["Q"] * 3, "playable": [True] * 3})
+    sess = FakeInjurySession({"A A": ("AAA", "E1"), "B B": ("AAA", "E2"), "C C": ("AAA", "E3")},
+                             {"E1": "x", "E2": "y", "E3": "z"})
+    cache = run_pipeline._RunCache(sess)
+    now = dt.datetime.now(dt.timezone.utc)
+    naps = []
+    run_pipeline.injuries.add_injury_columns(pool, "nba", now=now, session=cache, sleep=naps.append)
+    assert len(naps) == 2                                   # 3 real requests -> 2 pauses
+    naps.clear()
+    out, _ = run_pipeline.injuries.add_injury_columns(pool, "nba", now=now, session=cache, sleep=naps.append)
+    assert naps == [] and list(out.news_headline) == ["x", "y", "z"]  # all served from the cache
+    assert len(sess.urls) == 4
+
+
+def test_nfl_build_uses_run_cache(tmp_path, monkeypatch):
+    base = _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q"})
+    sleeper = {n: (t, f"E{d}") for n, t, d in zip(base["name"], base["team"], base["dk_id"])}
+    sess = FakeInjurySession(sleeper, {f"E{d}": "He practiced." for d in base["dk_id"]})
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: sess)
+    seen = []
+    for fn in ("add_injury_columns", "add_news"):
+        real = getattr(run_pipeline.injuries, fn)
+
+        def spy(*a, _real=real, **kw):
+            seen.append(kw["session"])
+            return _real(*a, **kw)
+        monkeypatch.setattr(run_pipeline.injuries, fn, spy)
+    msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    assert "WARNING" not in msg
+    assert len(seen) == 2 and seen[0] is seen[1] and isinstance(seen[0], run_pipeline._RunCache)
+    assert sum("sleeper" in u for u in sess.urls) == 1
+    espn = [u for u in sess.urls if "espn" in u]
+    assert espn and len(espn) == len(set(espn))
+
+
+def test_nfl_build_survives_time_budget(tmp_path, monkeypatch):
+    _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q", "AAA RB1": "OUT"})
+    monkeypatch.setattr(config, "INJURY_TIME_BUDGET_S", 0)   # budget already gone: nothing is requested
+    sess = FakeInjurySession({"CCC WR1": ("CCC", "E1")}, {"E1": "He has been ruled out."})
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: sess)
+    msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    assert "contest types built" in msg and "; WARNING: injury news unavailable (TimeoutError)" in msg
+    assert sess.urls == []
+    pool = pd.read_parquet(tmp_path / "published" / "player_pool.parquet").set_index("name")
+    assert pool.loc["CCC WR1", "inj_tag"] == "Q" and pool.loc["CCC WR1", "play_prob"] == config.Q_PLAY_PROB
+    assert pool.loc["AAA RB1", "inj_tag"] == "OUT" and (pool.news_headline == "").all()
+
+
 # ── NBA injuries ─────────────────────────────────────────────────────────────────────────────────────────
 def _nba_csv(statuses: dict) -> str:
     import io

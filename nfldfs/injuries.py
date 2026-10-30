@@ -214,9 +214,21 @@ def attach_sleeper(pool, sleeper, sport) -> pd.DataFrame:
     return out
 
 
+def news_url(espn_id, sport) -> str:
+    return ESPN_URL.format(path=ESPN_PATH[sport], espn_id=espn_id)
+
+
+def _pause(session, url, sleep) -> None:
+    """The polite pause between requests, skipped when the run cache already holds this URL."""
+    cached = getattr(session, "is_cached", None)
+    if callable(cached) and cached(url):
+        return
+    sleep(config.NEWS_DELAY_S)
+
+
 def fetch_news(espn_id, sport, session=None) -> dict | None:
     """Latest Rotowire blurb for one athlete, or None when ESPN has none (or 404s)."""
-    url = ESPN_URL.format(path=ESPN_PATH[sport], espn_id=espn_id)
+    url = news_url(espn_id, sport)
     if session is None:
         import requests
         session = requests.Session()
@@ -267,7 +279,7 @@ def fill_espn_ids(pool, sport, rows, *, session=None, sleep=time.sleep) -> str:
             raise ConnectionError("ESPN roster lookups unavailable")
         try:
             if state["requests"]:
-                sleep(config.NEWS_DELAY_S)
+                _pause(session, url, sleep)
             state["requests"] += 1
             data = _get_json(url, session)
             state["failures"] = 0
@@ -331,8 +343,9 @@ def add_injury_columns(pool, sport, *, now, session=None, news_for=None, sleep=t
     wanted = set(news_for or ())
     dk = out["dk_id"] if "dk_id" in out.columns else pd.Series([None] * n, index=out.index)
     need = [i for i in range(n) if out["inj_tag"].iat[i] != "" or dk.iat[i] in wanted]
-    try:
-        warning = warning or fill_espn_ids(out, sport, need, session=session, sleep=sleep)
+    try:   # always: when Sleeper is down this is the only way any tagged player gets news (and a lean)
+        w = fill_espn_ids(out, sport, need, session=session, sleep=sleep)
+        warning = warning or w
     except Exception as exc:  # noqa: BLE001
         warning = warning or f"; WARNING: injury news unavailable ({type(exc).__name__})"
     fetched = failures = 0
@@ -344,7 +357,7 @@ def add_injury_columns(pool, sport, *, now, session=None, news_for=None, sleep=t
             break
         try:
             if fetched:
-                sleep(config.NEWS_DELAY_S)
+                _pause(session, news_url(eid, sport), sleep)
             fetched += 1
             news = fetch_news(eid, sport, session)
             failures = 0
@@ -411,7 +424,7 @@ def add_news(pool, sport, dk_ids, *, session=None, sleep=time.sleep):
             break
         try:
             if fetched:
-                sleep(config.NEWS_DELAY_S)
+                _pause(session, news_url(eid, sport), sleep)
             fetched += 1
             news = fetch_news(eid, sport, session)
             failures = 0

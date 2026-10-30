@@ -221,12 +221,18 @@ def _injury_warning(exc: Exception) -> str:
 
 
 class _RunCache:
-    """One run's injury requests, shared across NBA slates: Sleeper is fetched once and each ESPN blurb once
-    (failures are remembered too). After MAX_NEWS_FAILURES consecutive failures every new request fails
-    at once, so a source that is down costs at most a few timeouts per run."""
+    """One run's injury requests, shared across slates (and the NFL build's before/after passes): Sleeper is
+    fetched once and each ESPN blurb once (failures are remembered too). After MAX_NEWS_FAILURES consecutive
+    failures, or once INJURY_TIME_BUDGET_S seconds have gone into injury requests this run, every new request
+    fails at once (counted as a failure, so callers keep the tags and add a WARNING). A source that is down
+    or slow costs at most a few timeouts / the time budget per run."""
 
-    def __init__(self, session):
+    def __init__(self, session, clock=time.monotonic):
         self.session, self.seen, self.failures = session, {}, 0
+        self.clock, self.spent = clock, 0.0
+
+    def is_cached(self, url) -> bool:
+        return url in self.seen
 
     def get(self, url, timeout=None):
         if url in self.seen:
@@ -236,12 +242,18 @@ class _RunCache:
             return hit
         if self.failures >= injuries.MAX_NEWS_FAILURES:
             raise ConnectionError("injury sources unavailable for the rest of this run")
+        if self.spent >= config.INJURY_TIME_BUDGET_S:
+            self.failures += 1
+            raise TimeoutError("injury time budget used up for this run")
+        start = self.clock()
         try:
             resp = self.session.get(url, timeout=timeout)
         except Exception as exc:
             self.failures += 1
             self.seen[url] = exc
             raise
+        finally:
+            self.spent += max(0.0, self.clock() - start)
         bad = getattr(resp, "status_code", 200) >= 400 and getattr(resp, "status_code", 200) != 404
         self.failures = self.failures + 1 if bad else 0
         self.seen[url] = resp
@@ -258,7 +270,7 @@ def step_build(today, args) -> str:
     # Network lives here, not in build_slate; no news problem may fail the build.
     session, inj_warn = None, ""
     try:
-        session = _injury_session()
+        session = _RunCache(_injury_session())   # Sleeper once, each blurb once, capped run-wide
         pool_base, inj_warn = injuries.add_injury_columns(pool_base, "nfl", now=dt.datetime.now(dt.timezone.utc),
                                                           session=session, sleep=_news_sleep)
     except Exception as exc:  # noqa: BLE001
