@@ -54,13 +54,17 @@ DraftKings' tag is the source of truth for the tag; Sleeper adds the body part; 
   play roughly four times in five); the number lives in config so it can be tuned. NBA "GTD" is treated as Q.
   NFL "P" (probable) is treated as healthy but still shows its tag.
 - **Reading the news ("lean"):** a keyword reading of the most recent blurb from the last 72 hours (Q/GTD only):
-  - *Leans out* (excluded like Doubtful): phrases such as "did not practice" / "DNP",
-    "not expected to play", "unlikely to play", "will not play", "won't play", "ruled out", "will miss",
-    "expected to miss", "sidelined", "listed as doubtful".
+  - *Leans out* (excluded like Doubtful) only on statements about **the game**, not practice: "ruled out",
+    "will not play", "won't play", "not expected to play", "unlikely to play", "will miss", "expected to miss",
+    "out for", "listed as doubtful", "doubtful to play". Nathan (2026-10-29): don't go by keywords alone —
+    players sometimes miss practice and still play.
+  - *Practice-only notes* ("did not practice", "DNP", "limited", "rest day", "veteran rest", "maintenance")
+    are **unclear**, never out on their own.
   - *Leans in*: "full participant", "full practice", "expected to play", "will play", "on track to play",
     "cleared", "upgraded", "removed from the injury report", "probable".
-  - Otherwise *unclear* → treated as plain Questionable. When phrases of both kinds appear, the later sentence
-    wins. Shown as "📰 leans out" / "leans in" next to the tag.
+  - Otherwise *unclear* → treated as plain Questionable. A game-level "in" statement ("expected to play",
+    "will play", "on track to play") beats any practice note; when game-level statements of both kinds appear, the
+    one later in the text wins; "not"/"no longer" directly before a phrase flips it. Shown as "📰 leans out" / "leans in" next to the tag.
 - **Backup plan for a questionable player in a recommended lineup:** best 1:1 swap (same slot, under the cap,
   healthy, not already in the lineup) by the contest's own score. If none fits, the best two-player rework (that
   player plus one other spot) that fits. Each shows: who comes in, salary left, and the lineup's score before →
@@ -92,6 +96,7 @@ DraftKings' tag is the source of truth for the tag; Sleeper adds the body part; 
 - **Order of work:** before NBA phase 2.
 
 ## 6. Where it shows
+- Recommended lineups: hovering a player shows his latest news (headline, age, story) as a tooltip.
 - Tag chip next to the name: Q / GTD yellow, D orange, OUT / IR red, P gray; "📰 leans out / leans in" when read.
 - ⭐ Recommended: a "🩹 Injury watch" box under the lineup listing each tagged player in it with the blurb, its
   age, and the backup plan ("If X sits: swap to Y — $300 left, 12% → 11%"), with an Apply button like swaps.
