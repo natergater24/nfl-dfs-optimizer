@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .dk_rules import dst_points, offense_points
+from .injuries import apply_play_prob
 
 GAME_SIGMA = 0.18
 TEAM_SIGMA = 0.20
@@ -66,7 +67,9 @@ def starting_qbs(pool: pd.DataFrame) -> dict:
     return {team: int(g.salary.idxmax()) for team, g in qbs.groupby("team")}
 
 
-def simulate(pool: pd.DataFrame, team_exp: pd.DataFrame, n_sims: int, seed: int) -> np.ndarray:
+def simulate(pool: pd.DataFrame, team_exp: pd.DataFrame, n_sims: int, seed: int, *, sit: bool = True) -> np.ndarray:
+    """Points per sim (rows) per pool player (columns). With a play_prob column, a questionable player
+    scores 0 in a seeded (1 - play_prob) share of sims (sit=False returns the when-he-plays draws)."""
     if not isinstance(pool.index, pd.RangeIndex) or pool.index.start != 0:
         raise ValueError("simulate() needs a pool with a 0-based RangeIndex (call reset_index first)")
     missing = sorted((set(pool.team) | set(pool.opp)) - set(team_exp.index))
@@ -137,7 +140,7 @@ def simulate(pool: pd.DataFrame, team_exp: pd.DataFrame, n_sims: int, seed: int)
                          def_tds=rng.binomial(1, DEF_TD_RATE, n), safeties=rng.binomial(1, SAFETY_RATE, n),
                          blocked_kicks=rng.binomial(1, BLOCKED_KICK_RATE, n))
         out[:, i] = pts if pool.at[i, "playable"] else 0.0
-    return out
+    return apply_play_prob(out, pool, seed) if sit else out
 
 
 def summarize(sims: np.ndarray, pool: pd.DataFrame) -> pd.DataFrame:

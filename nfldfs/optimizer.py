@@ -7,6 +7,7 @@ import pulp
 
 from .config import MIN_SALARY_DEFAULT, MIN_UNIQUE_PLAYERS, QB_STACK_MIN, SALARY_CAP
 from .dk_rules import POSITION_BOUNDS, ROSTER_SLOTS
+from .injuries import recommendable
 
 _SOLVER_NAME = None
 
@@ -30,7 +31,14 @@ def solve_lineup(pool: pd.DataFrame, objective: np.ndarray, *, min_salary: int =
     pos, team, opp = pool.position.to_numpy(), pool.team.to_numpy(), pool.opp.to_numpy()
     sal = pool.salary.to_numpy()
     excluded = set(int(d) for d in excludes)
-    rows = [i for i in range(len(pool)) if bool(pool.playable.iat[i]) and int(dkid[i]) not in excluded]
+    # App-made picks come from recommendable players only (no D/OUT/IR, no "leans out"). A user lock wins
+    # whatever the tag on an injury-aware pool; pools without injury columns keep the old playable-only rule.
+    ok = recommendable(pool)
+    playable = pool.playable.to_numpy(dtype=bool)
+    lockable = "recommendable" in pool.columns
+    locked = set(int(d) for d in locks)
+    rows = [i for i in range(len(pool)) if int(dkid[i]) not in excluded
+            and (ok[i] or (int(dkid[i]) in locked and (lockable or playable[i])))]
 
     prob = pulp.LpProblem("lineup", pulp.LpMaximize)
     x = {i: prob.add_variable(f"x_{i}", cat="Binary") for i in rows}

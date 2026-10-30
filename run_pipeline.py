@@ -32,8 +32,8 @@ import nbadfs.config as nba_config
 from nbadfs import dk as nba_dk
 from nbadfs import stats as nba_stats
 from nbadfs import vegas as nba_vegas
-from nfldfs import (build, config, dk_salaries, entries, nfl_stats, ownership, player_history, publish, results,
-                    team_env, vegas)
+from nfldfs import (build, config, dk_salaries, entries, injuries, nfl_stats, ownership, player_history, publish,
+                    results, team_env, vegas)
 from nfldfs.build import write_published
 from nfldfs.status import RunStatus, atomic_write_parquet, atomic_write_text
 
@@ -207,18 +207,47 @@ def step_vegas_if_stale(today, args) -> str:
     return step_vegas(today, args)
 
 
+def _injury_session():
+    import requests
+    return requests.Session()
+
+
+def _news_sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def _injury_warning(exc: Exception) -> str:
+    return f"; WARNING: injury news unavailable ({type(exc).__name__})"
+
+
 def step_build(today, args) -> str:
     P = config.PROCESSED
     sched_path = P / "schedule_rows.parquet"
     model_path = P / "ownership_model.json"
     model = json.loads(model_path.read_text()) if model_path.exists() else None
+    pool_base = pd.read_parquet(P / "pool_base.parquet")
+    # Injury tags + news before the build (they decide who may be suggested and who sits in some sims).
+    # Network lives here, not in build_slate; no news problem may fail the build.
+    session, inj_warn = None, ""
+    try:
+        session = _injury_session()
+        pool_base, inj_warn = injuries.add_injury_columns(pool_base, "nfl", now=dt.datetime.now(dt.timezone.utc),
+                                                          session=session, sleep=_news_sleep)
+    except Exception as exc:  # noqa: BLE001
+        inj_warn = _injury_warning(exc)
     res = build.build_slate(
-        pd.read_parquet(P / "pool_base.parquet"), pd.read_parquet(P / "player_weeks.parquet"),
+        pool_base, pd.read_parquet(P / "player_weeks.parquet"),
         pd.read_parquet(P / "team_weeks.parquet"), json.loads((P / "team_model.json").read_text()),
         pd.read_parquet(P / "vegas_games.parquet"), n_sims=config.N_SIMS, seed=config.SEED,
         n_candidates=config.N_CANDIDATES, field_size=config.FIELD_SIZE,
         schedule_rows=pd.read_parquet(sched_path) if sched_path.exists() else None,
         ownership_model=model)
+    try:   # news for everyone in a recommended lineup or alternate who wasn't fetched before the build
+        res["pool"], w = injuries.add_news(res["pool"], "nfl", res["lineups"]["dk_id"], session=session,
+                                           sleep=_news_sleep)
+        inj_warn = inj_warn or w
+    except Exception as exc:  # noqa: BLE001
+        inj_warn = inj_warn or _injury_warning(exc)
     slate = json.loads((P / "slate.json").read_text())
     slate_date = str(pd.read_parquet(P / "pool_base.parquet", columns=["kickoff"]).kickoff.min().date())
     dg_tag = slate.get("draft_group_id") or "upload"
@@ -233,7 +262,7 @@ def step_build(today, args) -> str:
     write_published(res, config.PUBLISHED, meta)
     rec = res["lineups"][res["lineups"]["rank"] == 0]
     msg = (f"{rec.contest_key.nunique()} contest types built; name match rate {res['match_rate']:.0%}"
-           + (f"; unmatched: {', '.join(res['unmatched'][:10])}" if res["unmatched"] else ""))
+           + (f"; unmatched: {', '.join(res['unmatched'][:10])}" if res["unmatched"] else "") + inj_warn)
     msg += _optional("saving player history", lambda: player_history.upsert_slate(
         config.HISTORY / "player_weeks.parquet", player_history.slate_rows(res["pool"], slate_date)))
     msg += _optional("archiving lineups", lambda: _archive_lineups(

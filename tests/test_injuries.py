@@ -311,3 +311,41 @@ def test_recommendable_falls_back_to_playable():
     df = pd.DataFrame({"playable": [True, False]})
     assert list(injuries.recommendable(df)) == [True, False]
     assert isinstance(injuries.recommendable(df), np.ndarray)
+
+
+def test_news_stops_after_repeated_failures():
+    # ESPN down: a few attempts, then give up (each real attempt can take the full 10 s timeout)
+    rows = 12
+    pool = pd.DataFrame({"dk_id": range(rows), "name": [f"P{i}" for i in range(rows)], "team": ["AAA"] * rows,
+                         "status": ["Q"] * rows, "playable": [True] * rows})
+    sl = _sleeper(*[(f"P{i}", "AAA", str(100 + i)) for i in range(rows)])
+    s = FakeSession(sleeper=sl, espn={}, espn_exc=TimeoutError("slow"))
+    _, warn = injuries.add_injury_columns(pool, "nfl", now=NOW, session=s, sleep=lambda _: None)
+    assert "TimeoutError" in warn
+    assert sum("athletes" in c for c in s.calls) == injuries.MAX_NEWS_FAILURES
+
+
+def test_add_news_for_suggested_untagged_players_only():
+    s = _fake_sources()
+    pool, _ = injuries.add_injury_columns(_pool(), "nfl", now=NOW.replace(hour=21), session=s,
+                                          sleep=lambda _: None)
+    before = len(s.calls)
+    naps = []
+    out, warn = injuries.add_news(pool, "nfl", [1, 2, 3], session=s, sleep=naps.append)
+    assert warn == "" and naps == []
+    assert s.calls[before:] == [injuries.ESPN_URL.format(path="football/nfl", espn_id="10")]  # tagged 2, 3 done
+    p = out.set_index("dk_id")
+    assert p.loc[1, "news_headline"] == "Healthy will play." and p.loc[1, "lean"] == ""
+    assert list(out["recommendable"]) == list(pool["recommendable"])
+    down = FakeSession(espn_exc=TimeoutError("slow"))
+    out2, warn2 = injuries.add_news(pool, "nfl", [1], session=down, sleep=lambda _: None)
+    assert "TimeoutError" in warn2 and (out2["news_headline"].iloc[0] == "")
+    assert injuries.add_news(pool.drop(columns=["espn_id"]), "nfl", [1], session=down)[1] == ""
+
+
+def test_sit_mask_is_seeded():
+    pp = np.array([1.0, 0.85, 0.0, np.nan])
+    a, b = injuries.sit_mask(pp, 20_000, 5), injuries.sit_mask(pp, 20_000, 5)
+    assert np.array_equal(a, b) and not np.array_equal(a, injuries.sit_mask(pp, 20_000, 6))
+    assert not a[:, 0].any() and a[:, 2].all() and not a[:, 3].any()
+    assert a[:, 1].mean() == pytest.approx(0.15, abs=0.01)

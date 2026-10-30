@@ -76,3 +76,33 @@ def test_game_and_dst_correlations(pool, team_exp):
     print("qb-qb", c_qb, "dst-oppqb", c_dst)
     assert c_qb > 0.05
     assert c_dst < -0.1
+
+
+def test_questionable_sits_in_15pct_of_sims(pool, team_exp):
+    from nfldfs import config
+    j = _col(pool, "AAA", "WR1")
+    raw = simulate.simulate(pool, team_exp, 10_000, seed=3)           # no play_prob column: untouched
+    p = pool.copy()
+    p["play_prob"] = 1.0
+    p.loc[j, "play_prob"] = config.Q_PLAY_PROB
+    a = simulate.simulate(p, team_exp, 10_000, seed=3)
+    b = simulate.simulate(p, team_exp, 10_000, seed=3)
+    assert np.array_equal(a, b)                                        # seeded: same build, same sims
+    others = np.arange(len(p)) != j
+    assert np.array_equal(a[:, others], raw[:, others])                # everyone else unchanged
+    sat = a[:, j] != raw[:, j]
+    assert (a[sat, j] == 0).all()
+    played = raw[:, j] > 0
+    assert (sat[played].mean()) == pytest.approx(1 - config.Q_PLAY_PROB, abs=0.015)
+    c = simulate.simulate(p, team_exp, 10_000, seed=4)
+    assert not np.array_equal(c[:, j] == 0, a[:, j] == 0)              # a different seed sits different sims
+
+
+def test_play_prob_zero_and_one(pool, team_exp):
+    j, k = _col(pool, "AAA", "WR1"), _col(pool, "BBB", "WR1")
+    p = pool.copy()
+    p["play_prob"] = 1.0
+    p.loc[j, "play_prob"] = 0.0
+    a = simulate.simulate(p, team_exp, 500, seed=1)
+    raw = simulate.simulate(pool, team_exp, 500, seed=1)
+    assert (a[:, j] == 0).all() and np.array_equal(a[:, k], raw[:, k])

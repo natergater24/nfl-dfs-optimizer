@@ -21,6 +21,7 @@ SLEEPER_URL = "https://api.sleeper.app/v1/players/{sport}"
 ESPN_URL = "https://site.web.api.espn.com/apis/common/v3/sports/{path}/athletes/{espn_id}/overview"
 ESPN_PATH = {"nfl": "football/nfl", "nba": "basketball/nba"}
 TIMEOUT_S = 10
+MAX_NEWS_FAILURES = 3   # consecutive ESPN failures before giving up for this run (each can take TIMEOUT_S)
 
 # ---------------------------------------------------------------- tags
 
@@ -258,17 +259,21 @@ def add_injury_columns(pool, sport, *, now, session=None, news_for=None, sleep=t
         now = now.replace(tzinfo=dt.timezone.utc)
     wanted = set(news_for or ())
     dk = out["dk_id"] if "dk_id" in out.columns else pd.Series([None] * n, index=out.index)
-    fetched = 0
+    fetched = failures = 0
     for i in range(n):
         eid = out["espn_id"].iat[i]
         if not eid or not (out["inj_tag"].iat[i] != "" or dk.iat[i] in wanted):
             continue
+        if failures >= MAX_NEWS_FAILURES:
+            break
         try:
             if fetched:
                 sleep(config.NEWS_DELAY_S)
             fetched += 1
             news = fetch_news(eid, sport, session)
+            failures = 0
         except Exception as exc:  # noqa: BLE001
+            failures += 1
             if not warning:
                 warning = f"; WARNING: injury news unavailable ({type(exc).__name__})"
             continue
@@ -281,12 +286,87 @@ def add_injury_columns(pool, sport, *, now, session=None, news_for=None, sleep=t
             lv = lean(f"{news['headline']} {news['story']}", parse_published(news["published"]), now)
             out.iat[i, out.columns.get_loc("lean")] = lv or ""
 
+    return classify(out), warning
+
+
+def classify(pool) -> pd.DataFrame:
+    """(Re)compute inj_tag, inj_class, recommendable and play_prob from status, lean and playable."""
+    out = pool.copy()
+    n = len(out)
+    status = out["status"] if "status" in out.columns else pd.Series([""] * n, index=out.index)
+    out["inj_tag"] = [normalize_tag(s) for s in status]
+    out["inj_class"] = [tag_class(t) for t in out["inj_tag"]]
+    if "lean" not in out.columns:
+        out["lean"] = ""
+    out["lean"] = out["lean"].fillna("").astype(str)
     playable = out["playable"].astype(bool).to_numpy() if "playable" in out.columns else np.ones(n, bool)
     cls = out["inj_class"].to_numpy()
     ok = (cls == "healthy") | ((cls == "questionable") & (out["lean"].to_numpy() != "out"))
     out["recommendable"] = (ok & playable).astype(bool)
     out["play_prob"] = np.where(~out["recommendable"], 0.0, np.where(cls == "questionable", config.Q_PLAY_PROB, 1.0))
+    return out
+
+
+def add_news(pool, sport, dk_ids, *, session=None, sleep=time.sleep):
+    """Fetch the latest blurb for the given players not fetched yet (untagged ones with an ESPN id).
+
+    Used after the lineups are built, so everyone in a recommended lineup or alternate has news. Tagged
+    players were fetched (and their lean read) before the build. Returns (pool, warning); never raises."""
+    out = pool.copy()
+    if "espn_id" not in out.columns or "dk_id" not in out.columns:
+        return out, ""
+    for col in ("news_headline", "news_story", "news_published"):
+        if col not in out.columns:
+            out[col] = ""
+    wanted = {int(d) for d in dk_ids}
+    tag = out["inj_tag"] if "inj_tag" in out.columns else pd.Series([""] * len(out), index=out.index)
+    warning, fetched, failures = "", 0, 0
+    for i in range(len(out)):
+        eid = out["espn_id"].iat[i]
+        if not eid or int(out["dk_id"].iat[i]) not in wanted or tag.iat[i] != "" or out["news_headline"].iat[i]:
+            continue
+        if failures >= MAX_NEWS_FAILURES:
+            break
+        try:
+            if fetched:
+                sleep(config.NEWS_DELAY_S)
+            fetched += 1
+            news = fetch_news(eid, sport, session)
+            failures = 0
+        except Exception as exc:  # noqa: BLE001
+            failures += 1
+            if not warning:
+                warning = f"; WARNING: injury news unavailable ({type(exc).__name__})"
+            continue
+        if news:
+            for col, key in (("news_headline", "headline"), ("news_story", "story"),
+                             ("news_published", "published")):
+                out.iat[i, out.columns.get_loc(col)] = news[key]
     return out, warning
+
+
+def sit_mask(play_prob, n_sims: int, seed: int) -> np.ndarray:
+    """(n_sims, players) bool: True where a player sits. Seeded from the build seed, so it is reproducible;
+    players with play_prob >= 1 never sit, play_prob <= 0 always sit."""
+    p = np.nan_to_num(np.asarray(play_prob, dtype=float), nan=1.0)
+    mask = np.zeros((n_sims, len(p)), dtype=bool)
+    cols = np.where(p < 1.0)[0]
+    if len(cols):
+        rng = np.random.default_rng([int(seed), 0x1A7])
+        mask[:, cols] = rng.random((n_sims, len(cols))) < (1.0 - p[cols])
+    return mask
+
+
+def apply_play_prob(sims, pool, seed: int) -> np.ndarray:
+    """Zero each player's score in the simulations where he sits; unchanged without a play_prob column."""
+    if "play_prob" not in pool.columns:
+        return sims
+    mask = sit_mask(pool["play_prob"].to_numpy(), sims.shape[0], seed)
+    if not mask.any():
+        return sims
+    out = sims.copy()
+    out[mask] = 0
+    return out
 
 
 def recommendable(pool) -> np.ndarray:

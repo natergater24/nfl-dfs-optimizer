@@ -11,6 +11,7 @@ from .config import (CANDIDATE_PERTURBATION, CONTEST_TYPES, FIELD_SIZE, MIN_SALA
                      MIN_UNIQUE_PLAYERS, MAX_SWAPS_PER_POSITION, N_CANDIDATES, N_SWAPS, REBUILD_CANDIDATES,
                      SALARY_CAP, SEED, SWAP_MAX_OWN_TOURNAMENT)
 from .dk_rules import ROSTER_SLOTS, assign_slots
+from .injuries import classify, recommendable
 from .optimizer import InfeasibleError, solve_lineup
 from .sim_eval import contest_metric, field_ownership, lineup_scores, sample_field, thresholds
 
@@ -19,15 +20,23 @@ log = logging.getLogger("nfldfs.lineups")
 LINEUP_COLUMNS = ["contest_key", "contest_label", "contest_group", "rank", "slot", "dk_id", "name", "position",
                   "team", "opp", "kickoff", "salary", "median", "floor", "ceiling", "own_pct", "tier",
                   "metric", "total_salary"]
+BACKUP_COLUMNS = ["tagged_dk_id", "kind", "out_dk_ids", "in_dk_ids", "remaining_salary", "metric_before",
+                  "metric_after", "message"]
+NO_BACKUP = "No healthy replacement fits under the cap."
+FLEX_POSITIONS = ("RB", "WR", "TE")
 SWAP_COLUMNS = ["out_dk_id", "out_name", "in_dk_id", "in_name", "position", "in_team", "salary_delta",
                 "remaining_salary", "median_delta", "ceiling_delta", "in_own_pct", "in_tier", "metric_delta"]
 
 
 def objective_values(pool: pd.DataFrame, weights: dict) -> np.ndarray:
-    return (weights.get("floor", 0) * pool["floor"].to_numpy(float)
-            + weights.get("median", 0) * pool["median"].to_numpy(float)
-            + weights.get("ceiling", 0) * pool["ceiling"].to_numpy(float)
-            - weights.get("own_penalty", 0) * pool["own_pct"].to_numpy(float))
+    """Weighted projection minus the ownership penalty; a questionable player's projection counts at play_prob."""
+    pts = (weights.get("floor", 0) * pool["floor"].to_numpy(float)
+           + weights.get("median", 0) * pool["median"].to_numpy(float)
+           + weights.get("ceiling", 0) * pool["ceiling"].to_numpy(float))
+    if "play_prob" in pool.columns:
+        pp = pool["play_prob"].fillna(1.0).to_numpy(float)
+        pts = pts * np.where((pp > 0) & (pp < 1), pp, 1.0)    # 0 = not recommendable: only ever a user lock
+    return pts - weights.get("own_penalty", 0) * pool["own_pct"].to_numpy(float)
 
 
 def generate_candidates(pool, sims, contest: dict, n: int, rng, *, min_salary: int = MIN_SALARY_DEFAULT,
@@ -53,7 +62,7 @@ def find_swaps(pool, sims, lineup: list[int], contest: dict, field_scores, n: in
     base = sims[:, lineup].sum(axis=1)
     base_metric = float((base >= thr).mean())
     sal, pos = pool.salary.to_numpy(), pool.position.to_numpy()
-    own, playable = pool.own_pct.to_numpy(float), pool.playable.to_numpy()
+    own, playable = pool.own_pct.to_numpy(float), recommendable(pool)
     total = int(sal[lineup].sum())
     obj = objective_values(pool, contest["weights"])
     in_lineup = np.zeros(len(pool), dtype=bool)
@@ -81,6 +90,90 @@ def find_swaps(pool, sims, lineup: list[int], contest: dict, field_scores, n: in
     df = pd.DataFrame(rows).sort_values("metric_delta", ascending=False, kind="stable")
     df = df.drop_duplicates("in_dk_id").groupby("position", sort=False).head(MAX_SWAPS_PER_POSITION)
     return df.head(n).reset_index(drop=True)[SWAP_COLUMNS]
+
+
+def _metric(scores: np.ndarray, field_scores, contest: dict) -> np.ndarray:
+    return contest_metric(scores.astype(np.float32, copy=False), field_scores, contest["metric"])
+
+
+def _shortlist(cand: np.ndarray, obj: np.ndarray, sal: np.ndarray, k: int) -> np.ndarray:
+    """The k best by objective plus the k cheapest (so a salary-saving rework is always considered)."""
+    best = cand[np.argsort(-obj[cand], kind="stable")[:k]]
+    cheap = cand[np.argsort(sal[cand], kind="stable")[:k]]
+    return np.unique(np.concatenate([best, cheap]))
+
+
+def injury_backups(pool: pd.DataFrame, sims: np.ndarray, field_scores, lineup_rows, contest: dict,
+                   per_slot: int = 10) -> pd.DataFrame:
+    """One row per tagged (non-healthy) player in the lineup: the best healthy 1:1 replacement for his slot
+    under the cap; else the best two-player rework (him + one other spot); else NO_BACKUP.
+
+    Slot rule: the same position, or any RB/WR/TE when he sits in FLEX. Replacements are healthy (no tag or
+    P), DraftKings-playable and not already in the lineup. Scored with the contest metric against the field."""
+    rows = [int(r) for r in lineup_rows]
+    p = pool if {"inj_class", "recommendable"} <= set(pool.columns) else classify(pool)
+    cls = p["inj_class"].to_numpy()
+    tagged = [r for r in rows if cls[r] != "healthy"]
+    if not tagged:
+        return pd.DataFrame(columns=BACKUP_COLUMNS)
+    sal, pos, dk = p.salary.to_numpy().astype(int), p.position.to_numpy(), p.dk_id.to_numpy().astype(int)
+    in_lineup = np.zeros(len(p), dtype=bool)
+    in_lineup[rows] = True
+    free = (cls == "healthy") & recommendable(p) & ~in_lineup
+    slot_of = dict(zip(assign_slots(p.iloc[rows]), ROSTER_SLOTS))
+    obj = objective_values(p, contest["weights"])
+    total = int(sal[rows].sum())
+    base = sims[:, rows].sum(axis=1)
+    before = float(_metric(base[:, None], field_scores, contest)[0])
+
+    def fits(r):
+        same = np.isin(pos, FLEX_POSITIONS) if slot_of[int(dk[r])] == "FLEX" else pos == pos[r]
+        return np.where(free & same)[0]
+
+    def row(t, kind, outs, ins, after, message):
+        return {"tagged_dk_id": int(dk[t]), "kind": kind, "out_dk_ids": [int(dk[i]) for i in outs],
+                "in_dk_ids": [int(dk[i]) for i in ins],
+                "remaining_salary": int(SALARY_CAP - total + (sal[list(outs)].sum() - sal[list(ins)].sum() if ins else 0)),
+                "metric_before": before, "metric_after": float(after), "message": message}
+
+    def names(ix):
+        return ", ".join(str(p["name"].iat[i]) for i in ix)
+
+    out = []
+    for t in tagged:
+        cand = fits(t)
+        cand = cand[total - sal[t] + sal[cand] <= SALARY_CAP]
+        if len(cand):
+            m = _metric(base[:, None] - sims[:, [t]] + sims[:, cand], field_scores, contest)
+            b = int(np.argmax(m))
+            j = int(cand[b])
+            out.append(row(t, "1:1", [t], [j], m[b], f"If {p['name'].iat[t]} sits: {names([j])}"))
+            continue
+        best = None
+        jt = _shortlist(fits(t), obj, sal, per_slot)
+        for o in rows:
+            if o == t or not len(jt):
+                continue
+            ko = _shortlist(fits(o), obj, sal, per_slot)
+            if not len(ko):
+                continue
+            J, K = np.meshgrid(jt, ko, indexing="ij")
+            J, K = J.ravel(), K.ravel()
+            keep = (J != K) & (total - sal[t] - sal[o] + sal[J] + sal[K] <= SALARY_CAP)
+            if not keep.any():
+                continue
+            J, K = J[keep], K[keep]
+            m = _metric((base - sims[:, t] - sims[:, o])[:, None] + sims[:, J] + sims[:, K], field_scores, contest)
+            b = int(np.argmax(m))
+            if best is None or m[b] > best[0]:
+                best = (float(m[b]), o, int(J[b]), int(K[b]))
+        if best is not None:
+            m, o, j, k = best
+            out.append(row(t, "two-player", [t, o], [j, k], m,
+                           f"If {p['name'].iat[t]} sits: {names([j, k])} for {names([t, o])}"))
+        else:
+            out.append(row(t, "none", [t], [], before, NO_BACKUP))
+    return pd.DataFrame(out, columns=BACKUP_COLUMNS)
 
 
 def _warn_ownership_conflict(pool: pd.DataFrame, field: np.ndarray) -> None:

@@ -17,6 +17,43 @@ def _private_lock_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA", tmp_path / "data")     # never touch the real data/.pipeline.lock
 
 
+class _Resp:
+    def __init__(self, data, status=200):
+        self.data, self.status_code = data, status
+
+    def json(self):
+        return self.data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+class FakeInjurySession:
+    """Sleeper + ESPN stand-in. sleeper: {name: (team, espn_id)}; news: {espn_id: text}."""
+    def __init__(self, sleeper=None, news=None, fail=False):
+        self.sleeper, self.news, self.fail, self.urls = sleeper or {}, news or {}, fail, []
+
+    def get(self, url, timeout=None):
+        self.urls.append(url)
+        if self.fail:
+            raise ConnectionError("down")
+        if "sleeper" in url:
+            return _Resp({str(i): {"full_name": n, "team": t, "espn_id": e}
+                          for i, (n, (t, e)) in enumerate(self.sleeper.items())})
+        eid = url.split("/athletes/")[1].split("/")[0]
+        if eid not in self.news:
+            return _Resp({}, 404)
+        published = dt.datetime.now(dt.timezone.utc).isoformat()
+        return _Resp({"rotowire": {"headline": self.news[eid], "story": "", "published": published}})
+
+
+@pytest.fixture(autouse=True)
+def _no_network_injury_news(monkeypatch):
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: FakeInjurySession())
+    monkeypatch.setattr(run_pipeline, "_news_sleep", lambda s: None)
+
+
 def _hold_lock():
     import fcntl
     config.DATA.mkdir(parents=True, exist_ok=True)
@@ -813,3 +850,75 @@ def test_partial_salary_failure_keeps_todays_earlier_build_published(nba_env, mo
     slates = json.loads((nba / "slates.json").read_text())
     assert [s["published"] for s in slates] == [True, True, True]
     assert "WARNING: " in [s for s in _status(tmp_path)["steps"] if s["name"] == "nba_salaries"][0]["message"]
+
+
+def _real_build_inputs(tmp_path, monkeypatch, statuses):
+    from tests.conftest import SYNTH_MODEL, synthetic_inputs
+    _paths(tmp_path, monkeypatch)
+    for name, v in (("N_SIMS", 300), ("N_CANDIDATES", 3), ("FIELD_SIZE", 150)):
+        monkeypatch.setattr(config, name, v)
+    P = tmp_path / "processed"
+    pool_base, pw, tw, games = synthetic_inputs()
+    for name, st in statuses.items():
+        pool_base.loc[pool_base["name"] == name, "status"] = st
+    pool_base.to_parquet(P / "pool_base.parquet", index=False)
+    pw.to_parquet(P / "player_weeks.parquet", index=False)
+    tw.to_parquet(P / "team_weeks.parquet", index=False)
+    games.to_parquet(P / "vegas_games.parquet", index=False)
+    (P / "team_model.json").write_text(json.dumps(SYNTH_MODEL))
+    (P / "slate.json").write_text(json.dumps({"draft_group_id": 154941}))
+    return pool_base
+
+
+def test_nfl_build_publishes_injury_files(tmp_path, monkeypatch):
+    base = _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q", "DDD WR1": "Q", "AAA TE1": "P"})
+    sleeper = {n: (t, f"E{d}") for n, t, d in zip(base["name"], base["team"], base["dk_id"])}
+    news = {f"E{d}": "He practiced fully on Wednesday." for d in base["dk_id"]}
+    cw = int(base.loc[base["name"] == "CCC WR1", "dk_id"].iloc[0])
+    dw = int(base.loc[base["name"] == "DDD WR1", "dk_id"].iloc[0])
+    news[f"E{cw}"] = "Smith has been ruled out for Sunday's game."
+    news[f"E{dw}"] = "Jones was limited at practice Wednesday."
+    sess = FakeInjurySession(sleeper, news)
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: sess)
+    msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    assert "WARNING" not in msg
+    pub = tmp_path / "published"
+    pool = pd.read_parquet(pub / "player_pool.parquet").set_index("dk_id")
+    assert {"inj_tag", "inj_class", "body_part", "news_headline", "news_story", "news_published", "lean",
+            "recommendable", "play_prob"} <= set(pool.columns)
+    assert pool.loc[cw, "lean"] == "out" and not pool.loc[cw, "recommendable"]
+    assert pool.loc[dw, "lean"] == "unclear" and pool.loc[dw, "play_prob"] == config.Q_PLAY_PROB
+    lus = pd.read_parquet(pub / "lineups.parquet")
+    assert cw not in set(lus.dk_id)
+    # news for every recommended/alternate player, and for nobody else who is healthy
+    suggested = set(lus.dk_id.astype(int))
+    has_news = set(pool.index[pool.news_headline != ""])
+    healthy_unsuggested = set(pool.index[(pool.inj_tag == "")]) - suggested
+    assert suggested <= has_news and not (has_news & healthy_unsuggested)
+    assert sum("sleeper" in u for u in sess.urls) == 1                     # one Sleeper call per run
+    bk = pd.read_parquet(pub / "injury_backups.parquet")
+    assert list(bk.columns) == ["contest_key", *run_pipeline.build.lineups.BACKUP_COLUMNS]
+    rec = lus[lus["rank"] == 0]
+    tagged = rec.merge(pool[["inj_class"]], left_on="dk_id", right_index=True)
+    assert len(bk) == int((tagged.inj_class != "healthy").sum())
+
+
+def test_nfl_build_survives_news_failure(tmp_path, monkeypatch):
+    _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q", "AAA RB1": "OUT"})
+    monkeypatch.setattr(run_pipeline, "_injury_session", lambda: FakeInjurySession(fail=True))
+    msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    assert "contest types built" in msg and "; WARNING: injury news unavailable (ConnectionError)" in msg
+    pub = tmp_path / "published"
+    pool = pd.read_parquet(pub / "player_pool.parquet").set_index("name")
+    assert pool.loc["CCC WR1", "inj_tag"] == "Q" and pool.loc["AAA RB1", "inj_tag"] == "OUT"
+    assert (pool.news_headline == "").all()
+    assert (pub / "injury_backups.parquet").exists() and (pub / "build_meta.json").exists()
+
+
+def test_nfl_build_survives_injury_code_crash(tmp_path, monkeypatch):
+    _real_build_inputs(tmp_path, monkeypatch, {"CCC WR1": "Q"})
+    monkeypatch.setattr(run_pipeline.injuries, "add_injury_columns", _boom)
+    monkeypatch.setattr(run_pipeline.injuries, "add_news", _boom)
+    msg = run_pipeline.step_build(dt.date(2026, 10, 15), SimpleNamespace())
+    assert "; WARNING: injury news unavailable (RuntimeError)" in msg
+    assert (tmp_path / "published" / "player_pool.parquet").exists()
