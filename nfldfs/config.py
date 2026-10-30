@@ -83,3 +83,7 @@ def dk_username() -> str | None:
     load_dotenv(ROOT / "env.txt")
     value = os.getenv("DK_USERNAME", "").strip()
     return value or None
+
+Q_PLAY_PROB = 0.85                 # questionable (not lean-out) players: chance they suit up
+NEWS_MAX_AGE_H = 72                # injury blurbs older than this are ignored
+NEWS_DELAY_S = 0.2                 # pause between ESPN news requests
