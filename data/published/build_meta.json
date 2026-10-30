@@ -5,9 +5,9 @@
   "game_count": 13,
   "source": "draftkings",
   "players": 674,
-  "fetched_at": "2026-10-29T21:14:27",
-  "built_at": "2026-10-29T21:17:49",
-  "built_at_utc": "2026-10-30T01:17:49+00:00",
+  "fetched_at": "2026-10-29T23:17:06",
+  "built_at": "2026-10-29T23:21:15",
+  "built_at_utc": "2026-10-30T03:21:15+00:00",
   "n_sims": 10000,
   "match_rate": 0.8027923211169284,
   "unmatched": [
