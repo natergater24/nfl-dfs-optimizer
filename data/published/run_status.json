@@ -1,37 +1,36 @@
 {
-  "stage": "thursday",
-  "started": "2026-10-29T09:00:05",
-  "finished": "2026-10-29T21:13:43",
+  "stage": "refresh",
+  "started": "2026-10-29T21:14:26",
+  "finished": "2026-10-29T21:17:49",
   "ok": true,
   "steps": [
     {
-      "name": "salaries_if_stale",
-      "started": "2026-10-29T09:00:05",
-      "finished": "2026-10-29T09:00:05",
+      "name": "salaries",
+      "started": "2026-10-29T21:14:26",
+      "finished": "2026-10-29T21:14:27",
       "ok": true,
-      "message": "skipped: this week's salaries are already downloaded"
+      "message": "674 players, 13 games (draftkings)"
     },
     {
       "name": "stats_if_missing",
-      "started": "2026-10-29T09:00:05",
-      "finished": "2026-10-29T09:00:05",
+      "started": "2026-10-29T21:14:27",
+      "finished": "2026-10-29T21:14:27",
       "ok": true,
       "message": "skipped: stats current through 2026 week 7"
     },
     {
-      "name": "vegas",
-      "started": "2026-10-29T09:00:05",
-      "finished": "2026-10-29T09:00:06",
+      "name": "vegas_if_stale",
+      "started": "2026-10-29T21:14:27",
+      "finished": "2026-10-29T21:14:27",
       "ok": true,
-      "message": "29 games with lines; Odds API requests remaining: 441"
+      "message": "27 games with lines; Odds API requests remaining: 439"
     },
     {
       "name": "build",
-      "started": "2026-10-29T09:00:06",
-      "finished": "2026-10-29T21:13:43",
+      "started": "2026-10-29T21:14:27",
+      "finished": "2026-10-29T21:17:49",
       "ok": true,
-      "message": "9 contest types built; name match rate 81%; unmatched: AJ Henning, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Behren Morton, Brennan Presley, Brock Lampe, CJ Daniels, CJ Dippre"
+      "message": "9 contest types built; name match rate 80%; unmatched: AJ Henning, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Barika Kpeenu, Behren Morton, Brennan Presley, Brock Lampe, Bryson Nesbit"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
