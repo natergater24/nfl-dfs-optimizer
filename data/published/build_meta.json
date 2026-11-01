@@ -5,11 +5,11 @@
   "game_count": 13,
   "source": "draftkings",
   "players": 674,
-  "fetched_at": "2026-10-29T23:17:06",
-  "built_at": "2026-10-29T23:21:15",
-  "built_at_utc": "2026-10-30T03:21:15+00:00",
+  "fetched_at": "2026-11-01T09:16:04",
+  "built_at": "2026-11-01T09:20:15",
+  "built_at_utc": "2026-11-01T14:20:15+00:00",
   "n_sims": 10000,
-  "match_rate": 0.8027923211169284,
+  "match_rate": 0.7974910394265233,
   "unmatched": [
     "AJ Henning",
     "Al-Jay Henderson",
@@ -125,8 +125,8 @@
     "Will Sheppard",
     "William Wagner"
   ],
-  "vegas_fetched_at": "2026-10-29T21:14:27",
-  "odds_requests_remaining": "439",
+  "vegas_fetched_at": "2026-11-01T09:16:04",
+  "odds_requests_remaining": "498",
   "slate_date": "2026-11-01",
   "ownership_model_weeks": null
 }

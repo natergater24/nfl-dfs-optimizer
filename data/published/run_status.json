@@ -1,37 +1,36 @@
 {
-  "stage": "refresh",
-  "started": "2026-10-29T23:17:04",
-  "finished": "2026-10-29T23:21:15",
+  "stage": "sunday",
+  "started": "2026-11-01T09:16:01",
+  "finished": "2026-11-01T09:20:15",
   "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-10-29T23:17:04",
-      "finished": "2026-10-29T23:17:06",
+      "started": "2026-11-01T09:16:01",
+      "finished": "2026-11-01T09:16:04",
       "ok": true,
       "message": "674 players, 13 games (draftkings)"
     },
     {
       "name": "stats_if_missing",
-      "started": "2026-10-29T23:17:06",
-      "finished": "2026-10-29T23:17:06",
+      "started": "2026-11-01T09:16:04",
+      "finished": "2026-11-01T09:16:04",
       "ok": true,
       "message": "skipped: stats current through 2026 week 7"
     },
     {
-      "name": "vegas_if_stale",
-      "started": "2026-10-29T23:17:06",
-      "finished": "2026-10-29T23:17:06",
+      "name": "vegas",
+      "started": "2026-11-01T09:16:04",
+      "finished": "2026-11-01T09:16:04",
       "ok": true,
-      "message": "skipped: lines fetched 123 min ago"
+      "message": "28 games with lines; Odds API requests remaining: 498"
     },
     {
       "name": "build",
-      "started": "2026-10-29T23:17:06",
-      "finished": "2026-10-29T23:21:15",
+      "started": "2026-11-01T09:16:04",
+      "finished": "2026-11-01T09:20:15",
       "ok": true,
       "message": "9 contest types built; name match rate 80%; unmatched: AJ Henning, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Barika Kpeenu, Behren Morton, Brennan Presley, Brock Lampe, Bryson Nesbit"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
