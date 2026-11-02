@@ -1,9 +1,37 @@
 [
   {
-    "draft_group_id": 156049,
-    "name": "Night",
-    "start": "2026-11-01T20:30:00",
+    "draft_group_id": 156054,
+    "name": "Main",
+    "start": "2026-11-02T19:00:00",
+    "games": 11,
+    "published": true
+  },
+  {
+    "draft_group_id": 156060,
+    "name": "Turbo",
+    "start": "2026-11-02T19:30:00",
+    "games": 5,
+    "published": true
+  },
+  {
+    "draft_group_id": 156061,
+    "name": "Turbo",
+    "start": "2026-11-02T20:00:00",
+    "games": 3,
+    "published": true
+  },
+  {
+    "draft_group_id": 156062,
+    "name": "Turbo",
+    "start": "2026-11-02T20:30:00",
     "games": 2,
+    "published": true
+  },
+  {
+    "draft_group_id": 156064,
+    "name": "Night",
+    "start": "2026-11-02T22:00:00",
+    "games": 3,
     "published": true
   }
 ]

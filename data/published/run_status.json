@@ -32,5 +32,6 @@
       "ok": false,
       "message": "ValueError: No Vegas lines yet for: DAL, IND, KC, NYJ. Lines are usually posted early in the week; re-run once they are."
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
