@@ -1,0 +1,13 @@
+{
+  "n_sims": 10000,
+  "seed": 20261023,
+  "stats_match_rate": 0.9431818181818182,
+  "sims_fingerprint": "01ac837257cc2137115e9175213bdd8e58f3194cd322ad811b94d140befc5c4d",
+  "built_at_utc": "2026-11-04T19:01:48+00:00",
+  "draft_group_id": 156084,
+  "name": "Turbo",
+  "start": "2026-11-04T20:00:00",
+  "games": 3,
+  "odds_remaining": "486",
+  "slate_date": "2026-11-04"
+}
