@@ -1,36 +1,29 @@
 {
-  "stage": "sunday",
-  "started": "2026-11-08T09:00:02",
-  "finished": "2026-11-08T09:04:11",
+  "stage": "sunday_late",
+  "started": "2026-11-08T11:45:01",
+  "finished": "2026-11-08T11:49:00",
   "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-11-08T09:00:02",
-      "finished": "2026-11-08T09:00:04",
+      "started": "2026-11-08T11:45:02",
+      "finished": "2026-11-08T11:45:03",
       "ok": true,
       "message": "683 players, 13 games (draftkings)"
     },
     {
-      "name": "stats_if_missing",
-      "started": "2026-11-08T09:00:04",
-      "finished": "2026-11-08T09:00:04",
+      "name": "vegas_if_stale",
+      "started": "2026-11-08T11:45:03",
+      "finished": "2026-11-08T11:45:03",
       "ok": true,
-      "message": "skipped: stats current through 2026 week 8"
-    },
-    {
-      "name": "vegas",
-      "started": "2026-11-08T09:00:04",
-      "finished": "2026-11-08T09:00:05",
-      "ok": true,
-      "message": "27 games with lines; Odds API requests remaining: 470"
+      "message": "skipped: lines fetched 165 min ago"
     },
     {
       "name": "build",
-      "started": "2026-11-08T09:00:05",
-      "finished": "2026-11-08T09:04:11",
+      "started": "2026-11-08T11:45:03",
+      "finished": "2026-11-08T11:49:00",
       "ok": true,
-      "message": "9 contest types built; name match rate 81%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Barika Kpeenu, Behren Morton, Ben Mann, Brennan Presley, Brock Lampe"
+      "message": "9 contest types built; name match rate 82%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Barika Kpeenu, Behren Morton, Ben Mann, Brennan Presley, Brock Lampe"
     }
   ]
 }
