@@ -32,5 +32,6 @@
       "ok": true,
       "message": "3 of 3 NBA slate(s) built"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
