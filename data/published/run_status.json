@@ -32,5 +32,6 @@
       "ok": true,
       "message": "9 contest types built; name match rate 85%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Brennan Presley, Brock Lampe, CJ Daniels, CJ Williams; WARNING: injury news unavailable (ConnectionError)"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
