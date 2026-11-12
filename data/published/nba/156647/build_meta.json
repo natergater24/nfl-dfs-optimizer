@@ -2,12 +2,12 @@
   "n_sims": 10000,
   "seed": 20261023,
   "stats_match_rate": 0.9666666666666667,
-  "sims_fingerprint": "83b5ebf63bade8a2c6aebdaeffdc276c46b04ee8c9a460e647eaecab0830f82e",
-  "built_at_utc": "2026-11-12T19:02:42+00:00",
+  "sims_fingerprint": "7c74e14db91691b8958f1d554e78eb11e16a86581377f576a3ca9eb85ca2042b",
+  "built_at_utc": "2026-11-12T23:39:46+00:00",
   "draft_group_id": 156647,
   "name": "Night",
   "start": "2026-11-12T20:00:00",
   "games": 2,
-  "odds_remaining": "450",
+  "odds_remaining": "448",
   "slate_date": "2026-11-12"
 }

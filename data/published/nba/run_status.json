@@ -1,36 +1,36 @@
 {
   "stage": "nba",
-  "started": "2026-11-12T14:01:11",
-  "finished": "2026-11-12T14:03:02",
+  "started": "2026-11-12T18:35:02",
+  "finished": "2026-11-12T18:39:55",
   "ok": true,
   "steps": [
     {
       "name": "nba_salaries",
-      "started": "2026-11-12T14:01:11",
-      "finished": "2026-11-12T14:01:13",
+      "started": "2026-11-12T18:35:02",
+      "finished": "2026-11-12T18:35:04",
       "ok": true,
       "message": "2 NBA Classic slate(s): Main (4 games), Night (2 games)"
     },
     {
       "name": "nba_vegas_if_stale",
-      "started": "2026-11-12T14:01:13",
-      "finished": "2026-11-12T14:01:13",
+      "started": "2026-11-12T18:35:04",
+      "finished": "2026-11-12T18:35:04",
       "ok": true,
-      "message": "8 NBA games listed; Odds API requests remaining: 450"
+      "message": "16 NBA games listed; Odds API requests remaining: 448"
     },
     {
       "name": "nba_stats_if_missing",
-      "started": "2026-11-12T14:01:13",
-      "finished": "2026-11-12T14:01:15",
+      "started": "2026-11-12T18:35:04",
+      "finished": "2026-11-12T18:35:04",
       "ok": true,
       "message": "season stats 2026 and 2027 ready"
     },
     {
       "name": "nba_build",
-      "started": "2026-11-12T14:01:15",
-      "finished": "2026-11-12T14:03:02",
+      "started": "2026-11-12T18:35:04",
+      "finished": "2026-11-12T18:39:55",
       "ok": true,
-      "message": "2 of 2 NBA slate(s) built"
+      "message": "2 of 2 NBA slate(s) built; WARNING: injury news unavailable (ConnectionError)"
     }
   ]
 }
