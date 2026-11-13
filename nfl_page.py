@@ -39,11 +39,6 @@ failed = [s for s in d.run_status.get("steps", []) if s.get("ok") is False]
 if failed:
     st.error(f"⚠ The last {d.run_status.get('stage', '')} run failed at "
              f"**{ui.step_label(failed[0].get('name', 'a step'))}**: {failed[0].get('message', '')}")
-for step in d.run_status.get("steps", []):
-    if "WARNING" in str(step.get("message", "")):          # whole-step warnings and "; WARNING: …" notes
-        st.warning(f"⚠ {ui.step_label(step.get('name', ''))}: {step['message']}")
-if not hosted and str(d.run_status.get("publish", "")).startswith("WARNING"):
-    st.warning(f"The phone copy may be out of date: {d.run_status['publish']}")
 
 labels = {c["label"]: k for k, c in CONTEST_TYPES.items()}
 top = st.columns([3, 3, 1, 1], vertical_alignment="bottom")
@@ -58,6 +53,7 @@ with top[0]:
     when = f"**Last refreshed: {ui.format_refresh(refreshed_at)}**" if refreshed_at else "**Last refreshed: unknown**"
     age = text.removeprefix("Updated ")
     st.markdown(f"{when} · :{color}[{age}] · next automatic refresh: {nxt}")
+    ui.refresh_status(d.run_status, hosted=hosted)
 label = top[1].selectbox("Classic contest type", list(labels), index=list(labels.values()).index("single_entry"),
                          key="contest_label")
 key = labels[label]

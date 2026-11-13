@@ -47,16 +47,17 @@ def test_step_warning_is_shown(make_app, published_dir, tmp_path):
          "message": "WARNING: The Odds API request failed (HTTP 429) Reusing lines fetched 30h ago."}]})
     at = make_app(pub)
     assert not at.exception
-    assert any("Vegas lines" in w.value and "30h ago" in w.value for w in at.warning)
+    assert any("didn't refresh" in e.label for e in at.expander)
+    assert any("Vegas lines" in m.value and "30h ago" in m.value for m in at.markdown)
 
 
 def test_publish_warning_shown_locally_only(make_app, published_dir, tmp_path):
     pub = _with_status(published_dir, tmp_path, {"stage": "sunday", "ok": True, "steps": [],
                                                  "publish": "WARNING: publishing failed — CalledProcessError"})
     at = make_app(pub, hosted="0")
-    assert any("phone copy may be out of date" in w.value for w in at.warning)
+    assert any("Phone app" in m.value and "partly refreshed" in m.value for m in at.markdown)
     at = make_app(pub, hosted="1")
-    assert not any("phone copy" in w.value for w in at.warning)
+    assert not any("Phone app" in m.value for m in at.markdown)
 
 
 def _header_text(at):

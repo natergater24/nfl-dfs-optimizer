@@ -62,3 +62,22 @@ def test_next_scheduled_refresh():
 def test_updated_text_singular_day():
     assert ui.updated_text(1500) == ("Updated 1 day ago", "red")
     assert ui.updated_text(3000) == ("Updated 2 days ago", "red")
+
+
+def test_refresh_items_list_each_step():
+    status = {"steps": [
+        {"name": "salaries_if_stale", "ok": True, "message": "skipped: this week's salaries are already downloaded"},
+        {"name": "vegas", "ok": True, "message": "27 games with lines; Odds API requests remaining: 452"},
+        {"name": "build", "ok": True, "message": "9 contest types built; name match rate 85%; unmatched: A, B; "
+                                                  "WARNING: injury news unavailable (ConnectionError)"},
+        {"name": "nba_build", "ok": False, "message": "RuntimeError: boom"}],
+        "publish": "WARNING: push to GitHub failed — fatal: unable to access"}
+    items = ui.refresh_items(status)
+    assert items[0][:2] == ("⏭", "DraftKings salaries")
+    assert items[1] == ("✅", "Vegas lines", "27 games with lines")
+    assert items[2] == ("✅", "Building lineups", "9 contest types built")
+    assert items[3][:2] == ("⚠️", "Injury news") and "asleep" in items[3][2]
+    assert items[4][:2] == ("❌", "Building lineups")
+    assert items[5][:2] == ("⚠️", "Phone app") and "GitHub" in items[5][2]
+    assert all(it[1] != "Phone app" for it in ui.refresh_items(status, hosted=True))
+    assert ui.refresh_items({"steps": [], "publish": "published to GitHub"})[-1] == ("✅", "Phone app", "updated")

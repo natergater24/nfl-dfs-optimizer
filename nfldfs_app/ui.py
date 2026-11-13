@@ -27,11 +27,73 @@ SCHEDULE_ET = ((1, 9, 0), (3, 9, 0), (6, 9, 0), (6, 11, 45))
 STEP_LABELS = {"salaries": "DraftKings salaries", "salaries_if_stale": "DraftKings salaries",
                "stats": "NFL stats", "stats_if_missing": "NFL stats", "vegas": "Vegas lines",
                "vegas_if_stale": "Vegas lines", "build": "building lineups", "results": "importing results",
-               "publish": "publishing"}
+               "publish": "publishing", "nba_salaries": "DraftKings salaries", "nba_vegas_if_stale": "Vegas lines",
+               "nba_stats_if_missing": "NBA stats", "nba_build": "building lineups"}
+# Plain words for the "; WARNING: …" notes a step can carry (matched by their start).
+_NOTE_LABELS = (("injury news unavailable", "Injury news",
+                 "not refreshed: no internet (the Mac was probably asleep). Click Refresh."),
+                ("nba lines not refreshed", "Vegas lines", "not refreshed: the odds service didn't answer"),
+                ("push to github failed", "Phone app", "not updated: couldn't reach GitHub"))
 
 
 def step_label(name: str) -> str:
     return STEP_LABELS.get(name, name)
+
+
+def _short(text: str, n: int = 70) -> str:
+    text = str(text).split("; ")[0].strip()
+    return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
+def _note_item(note: str, fallback_label: str) -> tuple[str, str, str]:
+    low = note.lower()
+    for start, label, detail in _NOTE_LABELS:
+        if low.startswith(start):
+            return "⚠️", label, detail
+    return "⚠️", fallback_label, "partly refreshed: " + _short(note)
+
+
+def refresh_items(run_status: dict, *, hosted: bool = False) -> list[tuple[str, str, str]]:
+    """(icon, what, detail) for each step of the last run: ✅ refreshed, ⏭ skipped (already current),
+    ⚠️ not (fully) refreshed, ❌ failed — plus whether it reached the phone (Mac only)."""
+    items = []
+    for step in run_status.get("steps", []) or []:
+        label = step_label(step.get("name", ""))
+        label = label[:1].upper() + label[1:]
+        msg = str(step.get("message", "")).strip()
+        main, *notes = msg.split("; WARNING: ")
+        if step.get("ok") is False:
+            items.append(("❌", label, "failed: " + _short(msg)))
+            continue
+        if main.startswith("WARNING: "):                         # the whole step only partly worked
+            items.append(_note_item(main.removeprefix("WARNING: "), label))
+        elif main.startswith("skipped"):
+            items.append(("⏭", label, _short(main.removeprefix("skipped:").strip()) or "already up to date"))
+        else:
+            items.append(("✅", label, _short(main)))
+        items.extend(_note_item(n, label) for n in notes)
+    publish = str(run_status.get("publish", "") or "")
+    if publish and not hosted:
+        if publish.startswith("WARNING"):
+            items.append(_note_item(publish.removeprefix("WARNING: "), "Phone app"))
+        elif publish.startswith("skipped"):
+            items.append(("⏭", "Phone app", "nothing new to send"))
+        else:
+            items.append(("✅", "Phone app", "updated"))
+    return items
+
+
+def refresh_status(run_status: dict, *, hosted: bool = False) -> None:
+    """Short "what refreshed" list for the last run; opens by itself when something didn't refresh."""
+    import streamlit as st
+    items = refresh_items(run_status, hosted=hosted)
+    if not items:
+        return
+    bad = sum(icon in ("⚠️", "❌") for icon, _, _ in items)
+    title = "✅ Everything refreshed" if not bad else f"⚠️ {bad} item{'s' if bad > 1 else ''} didn't refresh"
+    with st.expander(title, expanded=bool(bad)):
+        st.markdown("\n".join(f"- {icon} **{safe(what)}** — {safe(detail)}" for icon, what, detail in items),
+                    unsafe_allow_html=True)
 
 
 def money(v) -> str:

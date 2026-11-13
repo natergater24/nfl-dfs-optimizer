@@ -252,12 +252,9 @@ def _sidebar(hosted: bool) -> None:
 def _status_messages(run_status: dict, hosted: bool) -> None:
     failed = [s for s in run_status.get("steps", []) if s.get("ok") is False]
     if failed:
-        st.error(f"⚠ The last NBA run failed at **{failed[0].get('name', 'a step')}**: {failed[0].get('message', '')}")
-    for step in run_status.get("steps", []):
-        if "WARNING" in str(step.get("message", "")):
-            st.warning(f"⚠ {step.get('name', '')}: {step['message']}")
-    if not hosted and str(run_status.get("publish", "")).startswith("WARNING"):
-        st.warning(f"The phone copy may be out of date: {run_status['publish']}")
+        st.error(f"⚠ The last NBA run failed at **{ui.step_label(failed[0].get('name', 'a step'))}**: "
+                 f"{failed[0].get('message', '')}")
+    ui.refresh_status(run_status, hosted=hosted)
 
 
 def render() -> None:
