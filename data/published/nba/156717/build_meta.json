@@ -1,0 +1,13 @@
+{
+  "n_sims": 10000,
+  "seed": 20261023,
+  "stats_match_rate": 0.9487179487179487,
+  "sims_fingerprint": "a07b1cc470313eefd0e2f591ab2ace54aa3d38d3bbb2c60ee627d343ca7f489b",
+  "built_at_utc": "2026-11-14T19:07:01+00:00",
+  "draft_group_id": 156717,
+  "name": "Main",
+  "start": "2026-11-14T19:00:00",
+  "games": 5,
+  "odds_remaining": "442",
+  "slate_date": "2026-11-14"
+}
