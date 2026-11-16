@@ -1,9 +1,9 @@
 {
   "n_sims": 10000,
   "seed": 20261023,
-  "stats_match_rate": 0.9883720930232558,
-  "sims_fingerprint": "0637b577eda307401d0f4aa835761e4bf7a1f172f315dac4bd15eae224999091",
-  "built_at_utc": "2026-11-16T19:34:06+00:00",
+  "stats_match_rate": 1.0,
+  "sims_fingerprint": "defcb1623816268f8798daed16e2fc9382d303b8679be4406fa2e81d1226272a",
+  "built_at_utc": "2026-11-16T19:35:53+00:00",
   "draft_group_id": 156751,
   "name": "Night",
   "start": "2026-11-16T20:00:00",
