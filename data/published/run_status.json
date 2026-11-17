@@ -18,5 +18,6 @@
       "ok": false,
       "message": "ConnectionError: Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2023.parquet: HTTPSConnectionPool(host='github.com', port=443): Max retries exceeded with url: /nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2023.parquet (Caused by NameResolutionError(\"HTTPSConnection(host='github.com', port=443): Failed to resolve 'github.com' ([Errno 8] nodename nor servname provided, or not known)\"))"
     }
-  ]
+  ],
+  "publish": "WARNING: push to GitHub failed \u2014 fatal: unable to access 'https://github.com/natergater24/nfl-dfs-optimizer.git/': Could not resolve host: github.com (the local app still works)"
 }
