@@ -109,3 +109,26 @@ def test_lobby_contests_filters_by_draft_group():
     assert c.to_dict("records") == [{"contest_id": "196653900", "contest_name": "NFL $2.75M Fantasy Football Millionaire",
                                      "entry_fee": 20.0, "max_entries": 161764}]
     assert dk_salaries.lobby_contests({}, 1).empty
+
+
+def _g(dg, games, start, tag="", suffix=None):
+    return {"DraftGroupId": dg, "ContestTypeId": 21, "GameTypeId": 1, "GameCount": games,
+            "StartDateEst": start + ":00.0000000", "DraftGroupTag": tag, "ContestStartTimeSuffix": suffix}
+
+
+def test_find_main_slate_prefers_plain_main_over_sun_mon():
+    # Real lobby, week of Nov 22 2026: a 12-game "(Sun-Mon)" slate (adds Monday night) must not beat the
+    # 10-game featured main slate, and "(Early Only)" / "(Thu-Mon)" are not the main slate either.
+    lobby = {"DraftGroups": [
+        _g(156774, 13, "2026-11-19T20:15", suffix=" (Thu-Mon)"),
+        _g(156775, 7, "2026-11-22T13:00", suffix=" (Early Only)"),
+        _g(156776, 12, "2026-11-22T13:00", suffix=" (Sun-Mon)"),
+        _g(156561, 10, "2026-11-22T13:00", tag="Featured"),
+    ]}
+    assert dk_salaries.find_main_slate(lobby, dt.date(2026, 11, 17))["draft_group_id"] == 156561
+
+
+def test_find_main_slate_falls_back_to_suffixed_when_no_plain_slate():
+    lobby = {"DraftGroups": [_g(156775, 7, "2026-11-22T13:00", suffix=" (Early Only)"),
+                             _g(156776, 12, "2026-11-22T13:00", suffix=" (Sun-Mon)")]}
+    assert dk_salaries.find_main_slate(lobby, dt.date(2026, 11, 17))["draft_group_id"] == 156776

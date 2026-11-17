@@ -20,7 +20,9 @@ REQUIRED_COLUMNS = ["Position", "Name", "ID", "Salary", "Game Info", "TeamAbbrev
 
 
 def find_main_slate(lobby: dict, today: dt.date) -> dict:
-    """Earliest upcoming Sunday 1:00 PM ET Classic draft group with the most games."""
+    """Earliest upcoming Sunday 1:00 PM ET Classic main slate. DraftKings marks the variants that share that
+    start time with a suffix — "(Sun-Mon)" adds Monday night, "(Early Only)" drops the late games — so the plain
+    (no-suffix) slate wins, then Featured, then the most games."""
     rows = []
     for g in lobby.get("DraftGroups", []):
         if g.get("GameTypeId") != CLASSIC_GAME_TYPE_ID:
@@ -28,7 +30,9 @@ def find_main_slate(lobby: dict, today: dt.date) -> dict:
         start = dt.datetime.fromisoformat(g["StartDateEst"][:19])
         if start.date() < today or start.weekday() != 6 or (start.hour, start.minute) != (13, 0):
             continue
-        rows.append(((start.date(), -int(g.get("GameCount", 0)), g.get("DraftGroupTag") != "Featured"), g, start))
+        suffixed = bool(str(g.get("ContestStartTimeSuffix") or "").strip())
+        rows.append(((start.date(), suffixed, g.get("DraftGroupTag") != "Featured", -int(g.get("GameCount", 0))),
+                     g, start))
     if not rows:
         raise LookupError("No Sunday 1:00 PM Classic main slate found in the DraftKings lobby")
     rows.sort(key=lambda r: r[0])
