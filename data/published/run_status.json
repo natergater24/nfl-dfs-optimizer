@@ -1,30 +1,22 @@
 {
-  "stage": "sunday_late",
-  "started": "2026-11-15T11:45:06",
-  "finished": "2026-11-15T12:05:20",
-  "ok": true,
+  "stage": "tuesday",
+  "started": "2026-11-17T09:00:03",
+  "finished": "2026-11-17T09:00:11",
+  "ok": false,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-11-15T11:45:06",
-      "finished": "2026-11-15T11:45:21",
+      "started": "2026-11-17T09:00:03",
+      "finished": "2026-11-17T09:00:04",
       "ok": true,
-      "message": "619 players, 12 games (draftkings)"
+      "message": "504 players, 10 games (draftkings)"
     },
     {
-      "name": "vegas_if_stale",
-      "started": "2026-11-15T11:45:21",
-      "finished": "2026-11-15T11:45:21",
-      "ok": true,
-      "message": "skipped: lines fetched 153 min ago"
-    },
-    {
-      "name": "build",
-      "started": "2026-11-15T11:45:21",
-      "finished": "2026-11-15T12:05:20",
-      "ok": true,
-      "message": "9 contest types built; name match rate 84%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Antwane Wells Jr., Brennan Presley, Brock Lampe, CJ Daniels, Cade Klubnik"
+      "name": "stats",
+      "started": "2026-11-17T09:00:04",
+      "finished": "2026-11-17T09:00:11",
+      "ok": false,
+      "message": "ConnectionError: Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2023.parquet: HTTPSConnectionPool(host='github.com', port=443): Max retries exceeded with url: /nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2023.parquet (Caused by NameResolutionError(\"HTTPSConnection(host='github.com', port=443): Failed to resolve 'github.com' ([Errno 8] nodename nor servname provided, or not known)\"))"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
