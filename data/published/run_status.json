@@ -1,23 +1,36 @@
 {
-  "stage": "tuesday",
-  "started": "2026-11-17T09:00:03",
-  "finished": "2026-11-17T09:00:11",
-  "ok": false,
+  "stage": "refresh",
+  "started": "2026-11-17T15:39:22",
+  "finished": "2026-11-17T15:42:55",
+  "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-11-17T09:00:03",
-      "finished": "2026-11-17T09:00:04",
+      "started": "2026-11-17T15:39:22",
+      "finished": "2026-11-17T15:39:24",
       "ok": true,
-      "message": "504 players, 10 games (draftkings)"
+      "message": "619 players, 12 games (draftkings)"
     },
     {
-      "name": "stats",
-      "started": "2026-11-17T09:00:04",
-      "finished": "2026-11-17T09:00:11",
-      "ok": false,
-      "message": "ConnectionError: Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2023.parquet: HTTPSConnectionPool(host='github.com', port=443): Max retries exceeded with url: /nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2023.parquet (Caused by NameResolutionError(\"HTTPSConnection(host='github.com', port=443): Failed to resolve 'github.com' ([Errno 8] nodename nor servname provided, or not known)\"))"
+      "name": "stats_if_missing",
+      "started": "2026-11-17T15:39:24",
+      "finished": "2026-11-17T15:39:25",
+      "ok": true,
+      "message": "21336 player-weeks through 2026 week 10; model fit on 1932 team-games; actual points filled for 1379 player-slates"
+    },
+    {
+      "name": "vegas_if_stale",
+      "started": "2026-11-17T15:39:25",
+      "finished": "2026-11-17T15:39:25",
+      "ok": true,
+      "message": "29 games with lines; Odds API requests remaining: 430"
+    },
+    {
+      "name": "build",
+      "started": "2026-11-17T15:39:25",
+      "finished": "2026-11-17T15:42:55",
+      "ok": true,
+      "message": "9 contest types built; name match rate 85%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Andrew DePaola, Anthony Smith, Ben Mann, Brock Lampe, CJ Dippre, CJ Williams, Caden Prieskorn"
     }
-  ],
-  "publish": "WARNING: push to GitHub failed \u2014 fatal: unable to access 'https://github.com/natergater24/nfl-dfs-optimizer.git/': Could not resolve host: github.com (the local app still works)"
+  ]
 }
