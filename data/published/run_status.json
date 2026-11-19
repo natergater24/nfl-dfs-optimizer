@@ -32,5 +32,6 @@
       "ok": true,
       "message": "9 contest types built; name match rate 86%; unmatched: AJ Henning, Ahmani Marshall, Al-Jay Henderson, Anthony Smith, Ben Mann, Brock Lampe, CJ Dippre, CJ Williams, Cole Payton, Dallen Bentley"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
