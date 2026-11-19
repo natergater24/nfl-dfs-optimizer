@@ -6,8 +6,8 @@
   "source": "draftkings",
   "players": 504,
   "fetched_at": "2026-11-17T15:51:44",
-  "built_at": "2026-11-17T15:54:15",
-  "built_at_utc": "2026-11-17T20:54:15+00:00",
+  "built_at": "2026-11-19T09:12:31",
+  "built_at_utc": "2026-11-19T14:12:31+00:00",
   "n_sims": 10000,
   "match_rate": 0.8554502369668247,
   "unmatched": [
@@ -73,8 +73,8 @@
     "Will Sheppard",
     "Zach Wood"
   ],
-  "vegas_fetched_at": "2026-11-17T15:39:25",
-  "odds_requests_remaining": "430",
+  "vegas_fetched_at": "2026-11-19T09:09:36",
+  "odds_requests_remaining": "422",
   "slate_date": "2026-11-22",
   "ownership_model_weeks": null
 }
