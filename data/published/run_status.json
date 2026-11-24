@@ -18,5 +18,6 @@
       "ok": true,
       "message": "21635 player-weeks through 2026 week 11; model fit on 1958 team-games; actual points filled for 1604 player-slates"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
