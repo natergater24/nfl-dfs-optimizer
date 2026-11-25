@@ -32,5 +32,6 @@
       "ok": true,
       "message": "9 contest types built; name match rate 85%; unmatched: AJ Henning, Adam Randall, Al-Jay Henderson, Andrew DePaola, Antwane Wells Jr., Behren Morton, Ben Mann, Brady Boyd, CJ Williams, Caden Prieskorn"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
