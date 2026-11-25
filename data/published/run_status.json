@@ -1,23 +1,36 @@
 {
-  "stage": "tuesday",
-  "started": "2026-11-24T09:05:18",
-  "finished": "2026-11-24T09:05:25",
+  "stage": "refresh",
+  "started": "2026-11-25T12:13:16",
+  "finished": "2026-11-25T12:15:49",
   "ok": true,
   "steps": [
     {
       "name": "salaries",
-      "started": "2026-11-24T09:05:18",
-      "finished": "2026-11-24T09:05:20",
+      "started": "2026-11-25T12:13:16",
+      "finished": "2026-11-25T12:13:19",
       "ok": true,
-      "message": "472 players, 9 games (draftkings)"
+      "message": "479 players, 9 games (draftkings)"
     },
     {
-      "name": "stats",
-      "started": "2026-11-24T09:05:20",
-      "finished": "2026-11-24T09:05:25",
+      "name": "stats_if_missing",
+      "started": "2026-11-25T12:13:19",
+      "finished": "2026-11-25T12:13:19",
       "ok": true,
-      "message": "21635 player-weeks through 2026 week 11; model fit on 1958 team-games; actual points filled for 1604 player-slates"
+      "message": "skipped: stats current through 2026 week 11"
+    },
+    {
+      "name": "vegas_if_stale",
+      "started": "2026-11-25T12:13:19",
+      "finished": "2026-11-25T12:13:19",
+      "ok": true,
+      "message": "30 games with lines; Odds API requests remaining: 396"
+    },
+    {
+      "name": "build",
+      "started": "2026-11-25T12:13:19",
+      "finished": "2026-11-25T12:15:49",
+      "ok": true,
+      "message": "9 contest types built; name match rate 85%; unmatched: AJ Henning, Adam Randall, Al-Jay Henderson, Andrew DePaola, Antwane Wells Jr., Behren Morton, Ben Mann, Brady Boyd, CJ Williams, Caden Prieskorn"
     }
-  ],
-  "publish": "published to GitHub"
+  ]
 }
