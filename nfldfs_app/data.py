@@ -39,11 +39,26 @@ def missing_files(pub: Path) -> list[str]:
     return [f for f in REQUIRED_FILES if not (Path(pub) / f).exists()]
 
 
-def stamp(pub: Path) -> tuple:
+def other_slates(root: Path) -> list[dict]:
+    """Other NFL slates the Mac built (Thanksgiving, Sun-Mon …) that are complete on disk, soonest first."""
+    folder = Path(root) / "nfl_slates"
+    listed = _json(folder / "slates.json") if (folder / "slates.json").exists() else []
+    return [s for s in (listed if isinstance(listed, list) else [])
+            if s.get("published") and not missing_files(folder / str(s.get("draft_group_id")))]
+
+
+def other_slate_dir(root: Path, draft_group_id) -> Path:
+    return Path(root) / "nfl_slates" / str(draft_group_id)
+
+
+def stamp(pub: Path, root: Path | None = None) -> tuple:
     pub = Path(pub)
-    hist = pub.parent / "history"
-    base = tuple((f, (pub / f).stat().st_mtime if (pub / f).exists() else 0.0)
-                 for f in (*REQUIRED_FILES, *OPTIONAL_FILES))
+    root = Path(root) if root else pub
+    hist = root.parent / "history"
+    def mtime(folder: Path, f: str) -> float:
+        return (folder / f).stat().st_mtime if (folder / f).exists() else 0.0
+    base = tuple((f, mtime(pub, f)) for f in (*REQUIRED_FILES, "injury_backups.parquet")) \
+        + tuple((f, mtime(root, f)) for f in OPTIONAL_FILES if f != "injury_backups.parquet")
     return base + tuple((f"history/{f}", (hist / f).stat().st_mtime if (hist / f).exists() else 0.0)
                         for f in HISTORY_FILES)
 
@@ -72,9 +87,12 @@ class AppData:
         self.row_of = {int(d): i for i, d in enumerate(self.pool["dk_id"])}
 
 
-def load(pub: Path) -> AppData:
+def load(pub: Path, root: Path | None = None) -> AppData:
+    """One slate's published files from `pub`; run/results status, report card and history from `root` (the main
+    published folder — other slates live in root/nfl_slates/<draft_group_id>/)."""
     pub = Path(pub)
-    hist = pub.parent / "history"
+    root = Path(root) if root else pub
+    hist = root.parent / "history"
     pool = pd.read_parquet(pub / "player_pool.parquet")
     for col, default in MATCHUP_DEFAULTS.items():          # builds made before matchups existed
         if col not in pool.columns:
@@ -86,9 +104,9 @@ def load(pub: Path) -> AppData:
     return AppData(pool=pool, lineups=lineups, swaps=pd.read_parquet(pub / "swaps.parquet"),
                    sims=np.load(pub / "sims.npy").astype(np.float32),
                    field=np.load(pub / "field.npy").astype(np.int64),
-                   meta=_json(pub / "build_meta.json"), run_status=_json(pub / "run_status.json"),
-                   results_status=_json(pub / "results_status.json"),
-                   report_card=_json(pub / "report_card.json"),
+                   meta=_json(pub / "build_meta.json"), run_status=_json(root / "run_status.json"),
+                   results_status=_json(root / "results_status.json"),
+                   report_card=_json(root / "report_card.json"),
                    entries=entries_mod.load_entries(hist / "entries.parquet"),
                    player_weeks=player_history.load(hist / "player_weeks.parquet"),
                    backups=pd.read_parquet(bk) if bk.exists() else pd.DataFrame())

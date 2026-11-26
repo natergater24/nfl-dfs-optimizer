@@ -116,3 +116,31 @@ def test_selector_is_classic_contest_type(make_app, published_dir):
 def test_key_popover_mentions_classic():
     from nfldfs_app import ui
     assert "Classic" in ui.KEY_MARKDOWN
+
+
+def test_other_nfl_slates_picker(make_app, published_dir, tmp_path):
+    pub = tmp_path / "pub"
+    shutil.copytree(published_dir, pub)
+    other = pub / "nfl_slates" / "156932"
+    shutil.copytree(published_dir, other)
+    meta = json.loads((other / "build_meta.json").read_text())
+    meta.update(name="Thu", slate_name="Thu slate", start="2026-11-26T13:00:00", game_count=3)
+    (other / "build_meta.json").write_text(json.dumps(meta))
+    (pub / "nfl_slates" / "slates.json").write_text(json.dumps([
+        {"draft_group_id": 156932, "name": "Thu", "start": "2026-11-26T13:00:00", "game_count": 3,
+         "published": True},
+        {"draft_group_id": 157064, "name": "Afternoon", "start": "2026-11-26T16:30:00", "game_count": 2,
+         "published": False}]))
+    at = make_app(pub, hosted="1")
+    assert not at.exception
+    radio = at.radio(key="nfl_slate")
+    assert radio.value == "main" and len(radio.options) == 2                 # unpublished slate not offered
+    assert "Thu slate" not in " ".join(m.value for m in at.markdown)
+    radio.set_value("156932").run()
+    assert not at.exception
+    assert any("Thu slate" in m.value and "3 games" in m.value for m in at.markdown)
+
+
+def test_no_picker_without_other_slates(make_app, published_dir):
+    at = make_app(published_dir, hosted="1")
+    assert not at.exception and not [r for r in at.radio if r.key == "nfl_slate"]

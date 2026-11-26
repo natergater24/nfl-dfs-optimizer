@@ -132,3 +132,18 @@ def test_find_main_slate_falls_back_to_suffixed_when_no_plain_slate():
     lobby = {"DraftGroups": [_g(156775, 7, "2026-11-22T13:00", suffix=" (Early Only)"),
                              _g(156776, 12, "2026-11-22T13:00", suffix=" (Sun-Mon)")]}
     assert dk_salaries.find_main_slate(lobby, dt.date(2026, 11, 17))["draft_group_id"] == 156776
+
+
+def test_other_slates_lists_this_weeks_other_classic_slates():
+    lobby = {"DraftGroups": [
+        _g(156932, 3, "2026-11-26T13:00", tag="Featured", suffix=" (Thu)"),
+        _g(157064, 2, "2026-11-26T16:30", tag="Featured", suffix=" (Afternoon)"),
+        _g(156561, 10, "2026-11-29T13:00", tag="Featured"),
+        _g(156776, 12, "2026-11-29T13:00", suffix=" (Sun-Mon)"),
+        _g(155989, 13, "2027-01-03T12:00", tag="Featured"),                      # weeks away
+        {**_g(1, 2, "2026-11-26T13:00"), "GameTypeId": 96},                         # Showdown
+    ]}
+    rows = dk_salaries.other_slates(lobby, dt.date(2026, 11, 26), 156561)
+    assert [(r["draft_group_id"], r["name"], r["game_count"]) for r in rows] == [
+        (156932, "Thu", 3), (157064, "Afternoon", 2), (156776, "Sun-Mon", 12)]
+    assert rows[0]["start"] == "2026-11-26T13:00:00" and rows[0]["contest_type_id"] == 21

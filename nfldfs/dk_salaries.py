@@ -41,6 +41,22 @@ def find_main_slate(lobby: dict, today: dt.date) -> dict:
             "start": start.isoformat(), "game_count": int(g["GameCount"])}
 
 
+def other_slates(lobby: dict, today: dt.date, main_dg, days: int = 7) -> list[dict]:
+    """Every other Classic draft group starting today through `days` ahead (Thanksgiving, Early Only, Sun-Mon,
+    Thu-Mon …), soonest first. `name` is DraftKings' suffix without parentheses ("Main" when there is none)."""
+    rows = []
+    for g in lobby.get("DraftGroups", []):
+        if g.get("GameTypeId") != CLASSIC_GAME_TYPE_ID or str(g.get("DraftGroupId")) == str(main_dg):
+            continue
+        start = dt.datetime.fromisoformat(g["StartDateEst"][:19])
+        if not today <= start.date() <= today + dt.timedelta(days=days):
+            continue
+        name = str(g.get("ContestStartTimeSuffix") or "").strip().strip("()").strip() or "Main"
+        rows.append({"draft_group_id": int(g["DraftGroupId"]), "contest_type_id": int(g["ContestTypeId"]),
+                     "start": start.isoformat(), "game_count": int(g.get("GameCount", 0)), "name": name})
+    return sorted(rows, key=lambda r: (r["start"], -r["game_count"], r["draft_group_id"]))
+
+
 def fetch_lobby(session=None) -> dict:
     s = session or requests.Session()
     r = s.get(LOBBY_URL, headers=HEADERS, timeout=30)

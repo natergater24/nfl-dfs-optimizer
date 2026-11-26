@@ -8,20 +8,46 @@ from nfldfs.config import CONTEST_TYPES, GAME_STYLE, SALARY_CAP, SLATE_NAME
 from nfldfs.sim_eval import lineup_scores
 from nfldfs_app import actions, data, ui, view_builder, view_pool, view_recommended, view_results, view_sidebar
 
-@st.cache_resource(show_spinner=False, max_entries=2)
-def _load(pub: str, stamp: tuple):
-    d = data.load(Path(pub))
+@st.cache_resource(show_spinner=False, max_entries=4)
+def _load(pub: str, root: str, stamp: tuple):
+    d = data.load(Path(pub), Path(root))
     return d, lineup_scores(d.sims, d.field)
 
 
-pub = data.published_dir()
+def _slate_label(name: str, start, games) -> str:
+    try:
+        s = dt.datetime.fromisoformat(str(start)[:19])
+        when = f"{s:%a %b} {s.day} {s.strftime('%I:%M %p').lstrip('0')}"
+    except ValueError:
+        when = "time unknown"
+    return f"{name} · {when} · {games} games"
+
+
+KEEP_ON_SLATE_CHANGE = ("contest_label", "nfl_slate", "nfl_slate_seen", "flash", "get_latest_pending")
+
+root = data.published_dir()
+pub = root
 hosted = data.is_hosted()
-if data.missing_files(pub):
+if data.missing_files(root):
     st.title("NFL DFS Lineups")
     st.warning("No lineups built yet. On your Mac run `./py run_pipeline.py --stage thursday`"
                + (" — this page updates automatically once it publishes." if hosted else "."))
     st.stop()
-d, field_scores = _load(str(pub), data.stamp(pub))
+others = data.other_slates(root)
+if others:   # the Sunday main slate is the default; other DraftKings slates (Thanksgiving, Sun-Mon …) one click away
+    main_meta = data._json(root / "build_meta.json")
+    labels_by_id = {"main": _slate_label("Sunday main", main_meta.get("start"), main_meta.get("game_count", "?"))}
+    labels_by_id.update({str(s["draft_group_id"]): _slate_label(s.get("name", "Slate"), s.get("start"),
+                                                                s.get("game_count", "?")) for s in others})
+    choice = st.radio("Slate", list(labels_by_id), format_func=labels_by_id.get, horizontal=True, key="nfl_slate")
+    if st.session_state.get("nfl_slate_seen", "main") != choice:     # new slate: start every tab over
+        for k in list(st.session_state):
+            if k not in KEEP_ON_SLATE_CHANGE and not str(k).startswith("nba"):
+                del st.session_state[k]
+        st.session_state.nfl_slate_seen = choice
+    if choice != "main":
+        pub = data.other_slate_dir(root, choice)
+d, field_scores = _load(str(pub), str(root), data.stamp(pub, root))
 
 refreshed_at = ui.to_eastern(d.meta.get("built_at_utc") or d.meta.get("built_at"))
 if st.session_state.pop("get_latest_pending", False):          # set by "Get latest" before the reload
@@ -46,7 +72,7 @@ with top[0]:
     st.title("NFL DFS Lineups")
     text, color = ui.updated_text(data.minutes_since(d.meta.get("built_at_utc") or d.meta.get("built_at")))
     kickoff = ui.to_eastern(d.meta.get("start"))
-    parts = [f"**Game style: {GAME_STYLE}**", SLATE_NAME] + ([ui.format_refresh(kickoff)] if kickoff else []) \
+    parts = [f"**Game style: {GAME_STYLE}**", d.meta.get("slate_name") or SLATE_NAME] + ([ui.format_refresh(kickoff)] if kickoff else []) \
         + [f"{d.meta.get('game_count', '?')} games", f"${SALARY_CAP:,} cap"]
     st.markdown(" · ".join(parts))
     nxt = ui.format_refresh(ui.next_scheduled_refresh(dt.datetime.now(ui.EASTERN)))

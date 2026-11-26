@@ -27,7 +27,7 @@ SCHEDULE_ET = ((1, 9, 0), (3, 9, 0), (6, 9, 0), (6, 11, 45))
 STEP_LABELS = {"salaries": "DraftKings salaries", "salaries_if_stale": "DraftKings salaries",
                "stats": "NFL stats", "stats_if_missing": "NFL stats", "vegas": "Vegas lines",
                "vegas_if_stale": "Vegas lines", "build": "building lineups", "results": "importing results",
-               "publish": "publishing", "nba_salaries": "DraftKings salaries", "nba_vegas_if_stale": "Vegas lines",
+               "publish": "publishing", "other_slates": "other slates", "nba_salaries": "DraftKings salaries", "nba_vegas_if_stale": "Vegas lines",
                "nba_stats_if_missing": "NBA stats", "nba_build": "building lineups"}
 # Plain words for the "; WARNING: …" notes a step can carry (matched by their start).
 _NOTE_LABELS = (("injury news unavailable", "Injury news",

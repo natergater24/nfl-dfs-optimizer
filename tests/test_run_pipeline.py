@@ -1112,3 +1112,58 @@ def test_nba_build_survives_injury_code_crash(nba_env, monkeypatch):
     assert msg.startswith("1 of 1 NBA slate(s) built") and "; WARNING: injury news unavailable (RuntimeError)" in msg
     pool = pd.read_parquet(tmp_path / "published" / "nba" / "155547" / "pool.parquet").set_index("name")
     assert pool.at["Mikal Bridges", "inj_tag"] == "Q" and pool.at["Mikal Bridges", "play_prob"] == config.Q_PLAY_PROB
+
+
+def _fake_res(pool_base):
+    import numpy as np
+    pool = pool_base.reset_index(drop=True).assign(median=1.0, floor=0.5, ceiling=2.0, own_pct=1.0, tier="Moderate")
+    ids = pool.dk_id.head(9).astype(int).tolist()
+    lu = pd.DataFrame({"contest_key": ["h2h"] * len(ids), "rank": [0] * len(ids), "slot": list(range(len(ids))),
+                       "dk_id": ids})
+    return {"pool": pool, "lineups": lu, "swaps": pd.DataFrame(), "sims": np.zeros((10, len(pool))),
+            "field": np.zeros((5, 9), dtype=int), "match_rate": 1.0, "unmatched": []}
+
+
+def test_other_slates_build_publish_and_prune(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    from pathlib import Path as _P
+    csv_text = (_P(__file__).parent / "fixtures" / "dk_salaries_sample.csv").read_bytes().decode("utf-8")
+    slates = [{"draft_group_id": 1, "contest_type_id": 21, "start": "2026-11-26T13:00:00", "game_count": 3,
+               "name": "Thu"},
+              {"draft_group_id": 2, "contest_type_id": 21, "start": "2026-11-26T16:30:00", "game_count": 2,
+               "name": "Afternoon"},
+              {"draft_group_id": 3, "contest_type_id": 21, "start": "2026-11-20T13:00:00", "game_count": 9,
+               "name": "Old"}]
+    (tmp_path / "processed" / "other_slates.json").write_text(json.dumps(slates))
+    stale = tmp_path / "published" / "nfl_slates" / "999"
+    stale.mkdir(parents=True)
+
+    def fetch(s, session=None):
+        if s["draft_group_id"] == 2:
+            raise RuntimeError("DK down")
+        return csv_text
+    monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_salary_csv", fetch)
+    monkeypatch.setattr(run_pipeline, "_build_nfl_pool", lambda pb, session, model: (_fake_res(pb), ""))
+    written = []
+    monkeypatch.setattr(run_pipeline, "write_published", lambda res, out, meta, **kw: written.append((out, meta, kw)))
+    msg = run_pipeline.step_other_slates(dt.date(2026, 11, 26), SimpleNamespace())
+    assert msg.startswith("1 of 2 other slate(s) built: Thu") and "Afternoon slate not built" in msg
+    out, meta, kw = written[0]
+    assert out == tmp_path / "published" / "nfl_slates" / "1" and meta["name"] == "Thu"
+    assert kw["n_published_sims"] == config.N_SIMS_PUBLISHED_OTHER
+    listed = json.loads((tmp_path / "published" / "nfl_slates" / "slates.json").read_text())
+    assert [(s["draft_group_id"], s["published"]) for s in listed] == [(1, True), (2, False)]
+    assert not stale.exists()
+
+
+def test_other_slates_never_fail_the_run(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    (tmp_path / "processed" / "other_slates.json").write_text("not json")
+    msg = run_pipeline.step_other_slates(dt.date(2026, 11, 26), SimpleNamespace())
+    assert msg.startswith("WARNING: other slates not built")
+
+
+def test_main_stages_build_other_slates_before_publish():
+    for stage in ("thursday", "sunday", "sunday_late", "refresh"):
+        steps = run_pipeline.STAGES[stage]
+        assert steps.index("other_slates") == steps.index("build") + 1 and steps[-1] == "publish"

@@ -39,6 +39,7 @@ from nfldfs.status import RunStatus, atomic_write_parquet, atomic_write_text
 
 log = logging.getLogger("pipeline")
 LOCK_WAIT_SECONDS, LOCK_POLL_SECONDS = 15 * 60, 5
+_RUN: dict = {}      # per-run shared objects (the injury-news session reused by the other-slates step)
 
 
 def _now() -> str:
@@ -63,6 +64,9 @@ def step_salaries(today, args) -> str:
     if not args.salary_csv:
         msg += _optional("saving the contest list",
                          lambda: _save_contests(dk_salaries.lobby_contests(lobby, slate["draft_group_id"])))
+        msg += _optional("listing the other slates", lambda: atomic_write_text(
+            config.PROCESSED / "other_slates.json",
+            json.dumps(dk_salaries.other_slates(lobby, today, slate["draft_group_id"]), indent=2)))
     return msg
 
 
@@ -260,17 +264,20 @@ class _RunCache:
         return resp
 
 
-def step_build(today, args) -> str:
+def _nfl_model() -> dict | None:
+    path = config.PROCESSED / "ownership_model.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def _build_nfl_pool(pool_base: pd.DataFrame, session, model) -> tuple[dict, str]:
+    """Injury tags + news, the build, then news for every lineup player. Returns (build result, injury warning).
+    Network lives here, not in build_slate; no news problem may fail the build."""
     P = config.PROCESSED
     sched_path = P / "schedule_rows.parquet"
-    model_path = P / "ownership_model.json"
-    model = json.loads(model_path.read_text()) if model_path.exists() else None
-    pool_base = pd.read_parquet(P / "pool_base.parquet")
-    # Injury tags + news before the build (they decide who may be suggested and who sits in some sims).
-    # Network lives here, not in build_slate; no news problem may fail the build.
-    session, inj_warn = None, ""
-    try:
-        session = _RunCache(_injury_session())   # Sleeper once, each blurb once, capped run-wide
+    inj_warn = ""
+    try:   # tags before the build: they decide who may be suggested and who sits in some sims
+        if session is None:
+            raise RuntimeError("no injury session")
         pool_base, inj_warn = injuries.add_injury_columns(pool_base, "nfl", now=dt.datetime.now(dt.timezone.utc),
                                                           session=session, sleep=_news_sleep)
     except Exception as exc:  # noqa: BLE001
@@ -292,6 +299,21 @@ def step_build(today, args) -> str:
         inj_warn = inj_warn or w
     except Exception as exc:  # noqa: BLE001
         inj_warn = inj_warn or _injury_warning(exc)
+    return res, inj_warn
+
+
+def _new_injury_session():
+    try:
+        return _RunCache(_injury_session())   # Sleeper once, each blurb once, capped run-wide
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def step_build(today, args) -> str:
+    P = config.PROCESSED
+    model = _nfl_model()
+    _RUN["injury_session"] = session = _new_injury_session()
+    res, inj_warn = _build_nfl_pool(pd.read_parquet(P / "pool_base.parquet"), session, model)
     slate = json.loads((P / "slate.json").read_text())
     slate_date = str(pd.read_parquet(P / "pool_base.parquet", columns=["kickoff"]).kickoff.min().date())
     dg_tag = slate.get("draft_group_id") or "upload"
@@ -312,6 +334,56 @@ def step_build(today, args) -> str:
     msg += _optional("archiving lineups", lambda: _archive_lineups(
         res["lineups"], P / "slate_lineups" / f"{slate_date}_{dg_tag}.parquet", built_at))
     return msg
+
+
+OTHER_SLATES = "nfl_slates"      # data/published/nfl_slates/<draft_group_id>/ + slates.json
+
+
+def step_other_slates(today, args) -> str:
+    """Build every other upcoming NFL Classic slate (Thanksgiving, Early Only, Sun-Mon …) into its own published
+    folder. Never fails the run: one slate's problem is a warning, and the main slate is already built."""
+    root = config.PUBLISHED / OTHER_SLATES
+    try:
+        listed = config.PROCESSED / "other_slates.json"
+        slates = [s for s in (json.loads(listed.read_text()) if listed.exists() else [])
+                  if dt.date.fromisoformat(s["start"][:10]) >= today]
+        session = _RUN.get("injury_session") or _new_injury_session()
+        model = _nfl_model()
+        built, notes = [], ""
+        for s in slates:
+            dg = int(s["draft_group_id"])
+            try:
+                pool_base = dk_salaries.parse_salary_csv(dk_salaries.fetch_salary_csv(s))
+                res, inj_warn = _build_nfl_pool(pool_base, session, model)
+                meta = {**s, "source": "draftkings", "players": len(pool_base),
+                        "game_count": int(pool_base.game_id.nunique()), "built_at": _now(),
+                        "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                        "n_sims": config.N_SIMS, "match_rate": res["match_rate"], "unmatched": res["unmatched"],
+                        "slate_date": str(pool_base.kickoff.min().date()), "slate_name": f"{s['name']} slate"}
+                write_published(res, root / str(dg), meta, n_published_sims=config.N_SIMS_PUBLISHED_OTHER)
+                s["published"] = True
+                built.append(s["name"])
+                notes = notes or inj_warn
+            except Exception as exc:  # noqa: BLE001
+                log.exception("other slate %s failed", s.get("name"))
+                s["published"] = False
+                notes += f"; WARNING: {s.get('name')} slate not built ({type(exc).__name__})"
+        atomic_write_text(root / "slates.json", json.dumps(slates, indent=2))
+        _prune_other_slates(root, {str(s["draft_group_id"]) for s in slates if s.get("published")})
+        if not slates:
+            return "skipped: no other NFL slates this week"
+        return f"{len(built)} of {len(slates)} other slate(s) built: {', '.join(built) or 'none'}" + notes
+    except Exception as exc:  # noqa: BLE001
+        log.exception("other slates failed")
+        return f"WARNING: other slates not built ({type(exc).__name__})"
+
+
+def _prune_other_slates(root: Path, keep: set[str]) -> None:
+    if not root.is_dir():
+        return
+    for d in root.iterdir():
+        if d.is_dir() and d.name.isdigit() and d.name not in keep:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def _set_aside(f: Path, folder: Path) -> None:
@@ -647,10 +719,10 @@ def step_publish(today, args) -> str:
 
 STAGES = {
     "tuesday": ["salaries", "stats", "publish"],
-    "thursday": ["salaries_if_stale", "stats_if_missing", "vegas", "build", "publish"],
-    "sunday": ["salaries", "stats_if_missing", "vegas", "build", "publish"],
-    "sunday_late": ["salaries", "vegas_if_stale", "build", "publish"],
-    "refresh": ["salaries", "stats_if_missing", "vegas_if_stale", "build", "publish"],
+    "thursday": ["salaries_if_stale", "stats_if_missing", "vegas", "build", "other_slates", "publish"],
+    "sunday": ["salaries", "stats_if_missing", "vegas", "build", "other_slates", "publish"],
+    "sunday_late": ["salaries", "vegas_if_stale", "build", "other_slates", "publish"],
+    "refresh": ["salaries", "stats_if_missing", "vegas_if_stale", "build", "other_slates", "publish"],
     "results": ["results", "publish"],
     "build": ["build"],
     "nba": ["nba_salaries", "nba_vegas_if_stale", "nba_stats_if_missing", "nba_build", "publish"],
@@ -658,7 +730,7 @@ STAGES = {
 STEP_FUNCS = {
     "salaries": step_salaries, "salaries_if_stale": step_salaries_if_stale,
     "stats": step_stats, "stats_if_missing": step_stats_if_missing,
-    "vegas": step_vegas, "vegas_if_stale": step_vegas_if_stale, "build": step_build,
+    "vegas": step_vegas, "vegas_if_stale": step_vegas_if_stale, "build": step_build, "other_slates": step_other_slates,
     "results": step_results, "publish": step_publish,
     "nba_salaries": step_nba_salaries, "nba_vegas_if_stale": step_nba_vegas_if_stale,
     "nba_stats_if_missing": step_nba_stats_if_missing, "nba_build": step_nba_build,

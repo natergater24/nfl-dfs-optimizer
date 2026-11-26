@@ -91,7 +91,7 @@ def rank0_backups(pool: pd.DataFrame, sims: np.ndarray, field, lus: pd.DataFrame
     return pd.concat(frames, ignore_index=True)[cols] if frames else pd.DataFrame(columns=cols)
 
 
-def write_published(res: dict, out_dir, meta: dict) -> None:
+def write_published(res: dict, out_dir, meta: dict, n_published_sims: int = N_SIMS_PUBLISHED) -> None:
     """Everything the app reads. Each file is written atomically; build_meta.json goes last."""
     out = Path(out_dir)
     atomic_write_parquet(res["pool"], out / "player_pool.parquet")
@@ -99,7 +99,7 @@ def write_published(res: dict, out_dir, meta: dict) -> None:
     atomic_write_parquet(res["swaps"], out / "swaps.parquet")
     if "injury_backups" in res:
         atomic_write_parquet(res["injury_backups"], out / "injury_backups.parquet")
-    atomic_save_npy(res["sims"][:N_SIMS_PUBLISHED].astype(np.float16), out / "sims.npy")
+    atomic_save_npy(res["sims"][:n_published_sims].astype(np.float16), out / "sims.npy")
     atomic_save_npy(np.asarray(res["field"]).astype(np.int16), out / "field.npy")
     rec = res["lineups"][res["lineups"]["rank"] == 0]
     write_upload_csv([g for _, g in rec.groupby("contest_key", sort=False)], out / "dk_upload_recommended.csv")
