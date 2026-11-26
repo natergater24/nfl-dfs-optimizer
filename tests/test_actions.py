@@ -26,7 +26,7 @@ def test_run_stage_nonzero_exit():
 
 def test_run_stage_timeout_and_oserror():
     ok, msg = actions.run_stage("refresh", run=_raiser(subprocess.TimeoutExpired(["x"], 900)))
-    assert not ok and "15 minutes" in msg
+    assert not ok and "an hour" in msg
     ok, msg = actions.run_stage("refresh", run=_raiser(OSError("nope")))
     assert not ok and "OSError" in msg and "nope" not in msg
 

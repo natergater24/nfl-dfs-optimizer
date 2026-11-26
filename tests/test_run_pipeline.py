@@ -1143,11 +1143,11 @@ def test_other_slates_build_publish_and_prune(tmp_path, monkeypatch):
             raise RuntimeError("DK down")
         return csv_text
     monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_salary_csv", fetch)
-    monkeypatch.setattr(run_pipeline, "_build_nfl_pool", lambda pb, session, model: (_fake_res(pb), ""))
+    monkeypatch.setattr(run_pipeline, "_build_nfl_pool", lambda pb, session, model, **kw: (_fake_res(pb), ""))
     written = []
     monkeypatch.setattr(run_pipeline, "write_published", lambda res, out, meta, **kw: written.append((out, meta, kw)))
     msg = run_pipeline.step_other_slates(dt.date(2026, 11, 26), SimpleNamespace())
-    assert msg.startswith("1 of 2 other slate(s) built: Thu") and "Afternoon slate not built" in msg
+    assert msg.startswith("1 of 2 other slate(s) built: Thu") and "Afternoon slate not rebuilt" in msg
     out, meta, kw = written[0]
     assert out == tmp_path / "published" / "nfl_slates" / "1" and meta["name"] == "Thu"
     assert kw["n_published_sims"] == config.N_SIMS_PUBLISHED_OTHER
@@ -1166,4 +1166,25 @@ def test_other_slates_never_fail_the_run(tmp_path, monkeypatch):
 def test_main_stages_build_other_slates_before_publish():
     for stage in ("thursday", "sunday", "sunday_late", "refresh"):
         steps = run_pipeline.STAGES[stage]
-        assert steps.index("other_slates") == steps.index("build") + 1 and steps[-1] == "publish"
+        # the main slate is published first (never delayed by the other slates), then the others follow
+        assert steps[steps.index("build") + 1] == "publish"
+        assert steps.index("other_slates") > steps.index("build") + 1 and steps[-1] == "publish"
+
+
+def test_other_slate_keeps_last_good_build_when_refetch_fails(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    good = tmp_path / "published" / "nfl_slates" / "7"
+    good.mkdir(parents=True)
+    for f in ("player_pool.parquet", "lineups.parquet", "swaps.parquet", "sims.npy", "field.npy",
+              "build_meta.json"):
+        (good / f).write_text("x")
+    (tmp_path / "processed" / "other_slates.json").write_text(json.dumps([
+        {"draft_group_id": 7, "contest_type_id": 21, "start": "2026-11-26T13:00:00", "game_count": 3,
+         "name": "Thu"}]))
+    def boom(s, session=None):
+        raise RuntimeError("DK 403")
+    monkeypatch.setattr(run_pipeline.dk_salaries, "fetch_salary_csv", boom)
+    msg = run_pipeline.step_other_slates(dt.date(2026, 11, 26), SimpleNamespace())
+    assert "Thu slate not rebuilt" in msg and good.exists()
+    listed = json.loads((tmp_path / "published" / "nfl_slates" / "slates.json").read_text())
+    assert listed[0]["published"] is True

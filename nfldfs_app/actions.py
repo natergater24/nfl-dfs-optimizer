@@ -8,7 +8,7 @@ from pathlib import Path
 
 from nfldfs import config, entries, publish
 
-STAGE_TIMEOUT = 900
+STAGE_TIMEOUT = 3600            # a refresh also builds every other slate this week
 
 
 def run_stage(stage: str, *extra: str, run=subprocess.run) -> tuple[bool, str]:
@@ -16,7 +16,7 @@ def run_stage(stage: str, *extra: str, run=subprocess.run) -> tuple[bool, str]:
         r = run([sys.executable, str(config.ROOT / "run_pipeline.py"), "--stage", stage, *extra], cwd=str(config.ROOT),
                 capture_output=True, text=True, timeout=STAGE_TIMEOUT)
     except subprocess.TimeoutExpired:
-        return False, "The pipeline run took longer than 15 minutes and was stopped. Check logs/pipeline.log."
+        return False, "The pipeline run took longer than an hour and was stopped. Check logs/pipeline.log."
     except Exception as e:
         return False, f"Couldn't start the pipeline run ({type(e).__name__}). Check logs/pipeline.log."
     lines = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()

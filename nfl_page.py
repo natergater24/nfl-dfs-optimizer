@@ -39,7 +39,10 @@ if others:   # the Sunday main slate is the default; other DraftKings slates (Th
     labels_by_id = {"main": _slate_label("Sunday main", main_meta.get("start"), main_meta.get("game_count", "?"))}
     labels_by_id.update({str(s["draft_group_id"]): _slate_label(s.get("name", "Slate"), s.get("start"),
                                                                 s.get("game_count", "?")) for s in others})
-    choice = st.radio("Slate", list(labels_by_id), format_func=labels_by_id.get, horizontal=True, key="nfl_slate")
+    opts = list(labels_by_id)
+    keep = st.session_state.get("nfl_slate_seen", "main")      # survives a trip to the NBA page and back
+    choice = st.radio("Slate", opts, format_func=labels_by_id.get, horizontal=True,
+                      index=opts.index(keep) if keep in opts else 0, key="nfl_slate")
     if st.session_state.get("nfl_slate_seen", "main") != choice:     # new slate: start every tab over
         for k in list(st.session_state):
             if k not in KEEP_ON_SLATE_CHANGE and not str(k).startswith("nba"):
@@ -92,8 +95,8 @@ if hosted and top[3].button("🔄 Get latest", width="stretch", key="get_latest"
     st.cache_resource.clear()
     st.rerun()
 if not hosted and top[3].button("⟳ Refresh data now", width="stretch", key="refresh",
-                                help="Re-fetch injuries and lines, then rebuild lineups (about 2 minutes)"):
-    with st.spinner("Refreshing — about 2 minutes…"):
+                                help="Re-fetch injuries and lines, then rebuild every slate (main slate first, ~5 min; others follow)"):
+    with st.spinner("Refreshing — the main slate takes about 5 minutes, the other slates a few more…"):
         st.session_state.flash = actions.stage_flash("refresh", actions.run_stage("refresh"))
     st.cache_resource.clear()
     st.rerun()

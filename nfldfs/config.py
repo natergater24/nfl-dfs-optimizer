@@ -27,6 +27,8 @@ FIELD_MIN_SALARY = 45_000          # simulated opponents leave a bit more salary
 N_SIMS = 10_000
 N_SIMS_PUBLISHED = 5_000           # float16 copy the hosted app re-scores swaps with
 N_SIMS_PUBLISHED_OTHER = 2_000     # other NFL slates (Thanksgiving, Sun-Mon …): smaller copy keeps the repo lean
+N_SIMS_OTHER = 5_000               # other slates build lighter so a refresh of every slate stays quick
+N_CANDIDATES_OTHER = 40
 N_CANDIDATES = 150
 FIELD_SIZE = 2_000
 MIN_UNIQUE_PLAYERS = 3             # each candidate differs from earlier ones by >= 3 players

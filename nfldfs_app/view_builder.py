@@ -147,10 +147,11 @@ def render(d, key, label, field_scores):
 
     csv = upload_csv_text([by.loc[status["picked"]].reset_index()]) if status["valid"] else ""
     hosted = data.is_hosted()
+    no_record = hosted or bool(d.meta.get("slate_name"))   # other slates aren't tracked in My Results
     st.download_button("⬇ Download My Lineup (DraftKings CSV)", csv, file_name="dk_classic_my_lineup.csv",
                        mime="text/csv", disabled=not status["valid"], key="dl_mine",
-                       on_click=None if hosted else actions.record_my_build,
-                       args=None if hosted else (status["picked"], d.meta.get("slate_date", "")))
+                       on_click=None if no_record else actions.record_my_build,
+                       args=None if no_record else (status["picked"], d.meta.get("slate_date", "")))
     if status["valid"]:
         with st.expander("Side by side with the recommended lineup"):
             rec = d.lineups[(d.lineups.contest_key == key) & (d.lineups["rank"] == 0)].reset_index(drop=True)

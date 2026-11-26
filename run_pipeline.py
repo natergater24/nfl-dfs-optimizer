@@ -269,7 +269,8 @@ def _nfl_model() -> dict | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def _build_nfl_pool(pool_base: pd.DataFrame, session, model) -> tuple[dict, str]:
+def _build_nfl_pool(pool_base: pd.DataFrame, session, model, *, n_sims: int | None = None,
+                    n_candidates: int | None = None) -> tuple[dict, str]:
     """Injury tags + news, the build, then news for every lineup player. Returns (build result, injury warning).
     Network lives here, not in build_slate; no news problem may fail the build."""
     P = config.PROCESSED
@@ -289,8 +290,8 @@ def _build_nfl_pool(pool_base: pd.DataFrame, session, model) -> tuple[dict, str]
     res = build.build_slate(
         pool_base, pd.read_parquet(P / "player_weeks.parquet"),
         pd.read_parquet(P / "team_weeks.parquet"), json.loads((P / "team_model.json").read_text()),
-        pd.read_parquet(P / "vegas_games.parquet"), n_sims=config.N_SIMS, seed=config.SEED,
-        n_candidates=config.N_CANDIDATES, field_size=config.FIELD_SIZE,
+        pd.read_parquet(P / "vegas_games.parquet"), n_sims=n_sims or config.N_SIMS, seed=config.SEED,
+        n_candidates=n_candidates or config.N_CANDIDATES, field_size=config.FIELD_SIZE,
         schedule_rows=pd.read_parquet(sched_path) if sched_path.exists() else None,
         ownership_model=model)
     try:   # news for everyone in a recommended lineup or alternate who wasn't fetched before the build
@@ -340,6 +341,7 @@ OTHER_SLATES = "nfl_slates"      # data/published/nfl_slates/<draft_group_id>/ +
 
 
 def step_other_slates(today, args) -> str:
+    from nfldfs_app.data import missing_files
     """Build every other upcoming NFL Classic slate (Thanksgiving, Early Only, Sun-Mon …) into its own published
     folder. Never fails the run: one slate's problem is a warning, and the main slate is already built."""
     root = config.PUBLISHED / OTHER_SLATES
@@ -354,11 +356,12 @@ def step_other_slates(today, args) -> str:
             dg = int(s["draft_group_id"])
             try:
                 pool_base = dk_salaries.parse_salary_csv(dk_salaries.fetch_salary_csv(s))
-                res, inj_warn = _build_nfl_pool(pool_base, session, model)
+                res, inj_warn = _build_nfl_pool(pool_base, session, model, n_sims=config.N_SIMS_OTHER,
+                                                n_candidates=config.N_CANDIDATES_OTHER)
                 meta = {**s, "source": "draftkings", "players": len(pool_base),
                         "game_count": int(pool_base.game_id.nunique()), "built_at": _now(),
                         "built_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-                        "n_sims": config.N_SIMS, "match_rate": res["match_rate"], "unmatched": res["unmatched"],
+                        "n_sims": config.N_SIMS_OTHER, "match_rate": res["match_rate"], "unmatched": res["unmatched"],
                         "slate_date": str(pool_base.kickoff.min().date()), "slate_name": f"{s['name']} slate"}
                 write_published(res, root / str(dg), meta, n_published_sims=config.N_SIMS_PUBLISHED_OTHER)
                 s["published"] = True
@@ -366,10 +369,10 @@ def step_other_slates(today, args) -> str:
                 notes = notes or inj_warn
             except Exception as exc:  # noqa: BLE001
                 log.exception("other slate %s failed", s.get("name"))
-                s["published"] = False
-                notes += f"; WARNING: {s.get('name')} slate not built ({type(exc).__name__})"
+                s["published"] = not missing_files(root / str(dg))     # keep its last good build, if any
+                notes += f"; WARNING: {s.get('name')} slate not rebuilt ({type(exc).__name__})"
         atomic_write_text(root / "slates.json", json.dumps(slates, indent=2))
-        _prune_other_slates(root, {str(s["draft_group_id"]) for s in slates if s.get("published")})
+        _prune_other_slates(root, {str(s["draft_group_id"]) for s in slates})   # only slates no longer listed
         if not slates:
             return "skipped: no other NFL slates this week"
         return f"{len(built)} of {len(slates)} other slate(s) built: {', '.join(built) or 'none'}" + notes
@@ -719,10 +722,10 @@ def step_publish(today, args) -> str:
 
 STAGES = {
     "tuesday": ["salaries", "stats", "publish"],
-    "thursday": ["salaries_if_stale", "stats_if_missing", "vegas", "build", "other_slates", "publish"],
-    "sunday": ["salaries", "stats_if_missing", "vegas", "build", "other_slates", "publish"],
-    "sunday_late": ["salaries", "vegas_if_stale", "build", "other_slates", "publish"],
-    "refresh": ["salaries", "stats_if_missing", "vegas_if_stale", "build", "other_slates", "publish"],
+    "thursday": ["salaries_if_stale", "stats_if_missing", "vegas", "build", "publish", "other_slates", "publish"],
+    "sunday": ["salaries", "stats_if_missing", "vegas", "build", "publish", "other_slates", "publish"],
+    "sunday_late": ["salaries", "vegas_if_stale", "build", "publish", "other_slates", "publish"],
+    "refresh": ["salaries", "stats_if_missing", "vegas_if_stale", "build", "publish", "other_slates", "publish"],
     "results": ["results", "publish"],
     "build": ["build"],
     "nba": ["nba_salaries", "nba_vegas_if_stale", "nba_stats_if_missing", "nba_build", "publish"],
