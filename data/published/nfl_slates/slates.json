@@ -1,0 +1,74 @@
+[
+  {
+    "draft_group_id": 156932,
+    "contest_type_id": 21,
+    "start": "2026-11-26T13:00:00",
+    "game_count": 3,
+    "name": "Thu",
+    "published": true
+  },
+  {
+    "draft_group_id": 157064,
+    "contest_type_id": 21,
+    "start": "2026-11-26T16:30:00",
+    "game_count": 2,
+    "name": "Afternoon",
+    "published": true
+  },
+  {
+    "draft_group_id": 157065,
+    "contest_type_id": 21,
+    "start": "2026-11-26T20:20:00",
+    "game_count": 2,
+    "name": "Thu-Fri",
+    "published": true
+  },
+  {
+    "draft_group_id": 157068,
+    "contest_type_id": 21,
+    "start": "2026-11-29T13:00:00",
+    "game_count": 11,
+    "name": "Sun-Mon",
+    "published": true
+  },
+  {
+    "draft_group_id": 157067,
+    "contest_type_id": 21,
+    "start": "2026-11-29T13:00:00",
+    "game_count": 6,
+    "name": "Early Only",
+    "published": true
+  },
+  {
+    "draft_group_id": 157535,
+    "contest_type_id": 21,
+    "start": "2026-11-29T16:05:00",
+    "game_count": 3,
+    "name": "Afternoon Only",
+    "published": true
+  },
+  {
+    "draft_group_id": 157536,
+    "contest_type_id": 21,
+    "start": "2026-11-29T16:25:00",
+    "game_count": 2,
+    "name": "Afternoon Turbo",
+    "published": true
+  },
+  {
+    "draft_group_id": 157071,
+    "contest_type_id": 21,
+    "start": "2026-11-29T20:20:00",
+    "game_count": 2,
+    "name": "Primetime",
+    "published": true
+  },
+  {
+    "draft_group_id": 157118,
+    "contest_type_id": 21,
+    "start": "2026-11-30T20:15:00",
+    "game_count": 2,
+    "name": "Mon-Thu",
+    "published": false
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "draft_group_id": 157065,
+  "contest_type_id": 21,
+  "start": "2026-11-26T20:20:00",
+  "game_count": 2,
+  "name": "Thu-Fri",
+  "source": "draftkings",
+  "players": 106,
+  "built_at": "2026-11-26T09:27:24",
+  "built_at_utc": "2026-11-26T14:27:24+00:00",
+  "n_sims": 10000,
+  "match_rate": 0.8255813953488372,
+  "unmatched": [
+    "Brock Lampe",
+    "Dallen Bentley",
+    "Dane Key",
+    "Drew Allar",
+    "EJ Smith",
+    "Garrett Nussmeier",
+    "Ja'Mori Maclin",
+    "James Winchester",
+    "Lake McRee",
+    "Mitchell Fraboni",
+    "Omari Evans",
+    "Sam Ehlinger",
+    "Stephen Gosnell",
+    "Thomas Odukoya",
+    "Will Howard"
+  ],
+  "slate_date": "2026-11-26",
+  "slate_name": "Thu-Fri slate"
+}

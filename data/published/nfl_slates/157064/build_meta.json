@@ -1,0 +1,29 @@
+{
+  "draft_group_id": 157064,
+  "contest_type_id": 21,
+  "start": "2026-11-26T16:30:00",
+  "game_count": 2,
+  "name": "Afternoon",
+  "source": "draftkings",
+  "players": 104,
+  "built_at": "2026-11-26T09:25:54",
+  "built_at_utc": "2026-11-26T14:25:54+00:00",
+  "n_sims": 10000,
+  "match_rate": 0.8536585365853658,
+  "unmatched": [
+    "Anthony Smith",
+    "Brock Lampe",
+    "Cole Payton",
+    "EJ Smith",
+    "Garrett Nussmeier",
+    "Ja'Mori Maclin",
+    "James Winchester",
+    "Michael Trigg",
+    "Omari Evans",
+    "Rocco Underwood",
+    "Stephen Gosnell",
+    "Thomas Odukoya"
+  ],
+  "slate_date": "2026-11-26",
+  "slate_name": "Afternoon slate"
+}
