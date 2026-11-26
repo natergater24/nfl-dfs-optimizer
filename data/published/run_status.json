@@ -39,5 +39,6 @@
       "ok": true,
       "message": "8 of 9 other slate(s) built: Thu, Afternoon, Thu-Fri, Sun-Mon, Early Only, Afternoon Only, Afternoon Turbo, Primetime; WARNING: Mon-Thu slate not built (RuntimeError)"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
