@@ -6,8 +6,8 @@
   "source": "draftkings",
   "players": 479,
   "fetched_at": "2026-11-25T12:13:18",
-  "built_at": "2026-11-25T12:15:49",
-  "built_at_utc": "2026-11-25T17:15:49+00:00",
+  "built_at": "2026-11-26T09:12:35",
+  "built_at_utc": "2026-11-26T14:12:35+00:00",
   "n_sims": 10000,
   "match_rate": 0.8481012658227848,
   "unmatched": [
@@ -72,8 +72,8 @@
     "William Wagner",
     "Zach Wood"
   ],
-  "vegas_fetched_at": "2026-11-25T12:13:19",
-  "odds_requests_remaining": "396",
+  "vegas_fetched_at": "2026-11-26T09:05:25",
+  "odds_requests_remaining": "390",
   "slate_date": "2026-11-29",
   "ownership_model_weeks": null
 }

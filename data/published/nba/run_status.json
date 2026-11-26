@@ -32,5 +32,6 @@
       "ok": true,
       "message": "4 of 4 NBA slate(s) built; WARNING: injury news unavailable (ConnectionError)"
     }
-  ]
+  ],
+  "publish": "published to GitHub"
 }
