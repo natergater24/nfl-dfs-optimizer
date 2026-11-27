@@ -2,12 +2,12 @@
   "n_sims": 10000,
   "seed": 20261023,
   "stats_match_rate": 0.9818181818181818,
-  "sims_fingerprint": "bf84bd56c6bbf118c20ea4b6d08f1988b9bb09955974d4253cf80491aed63616",
-  "built_at_utc": "2026-11-27T19:24:06+00:00",
+  "sims_fingerprint": "908e61da220184b3768aac9b4dae2a8e6dfa03b376c1ecee324a6e61ed9b3ed0",
+  "built_at_utc": "2026-11-27T23:42:57+00:00",
   "draft_group_id": 157352,
   "name": "Turbo",
   "start": "2026-11-27T20:00:00",
   "games": 2,
-  "odds_remaining": "388",
+  "odds_remaining": "386",
   "slate_date": "2026-11-27"
 }
